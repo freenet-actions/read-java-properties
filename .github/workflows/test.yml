@@ -1,0 +1,14 @@
+name: Test
+on: pull_request
+
+jobs:
+  test:
+    runs-on: ubuntu
+    defaults:
+      run:
+        shell: bash
+    steps:
+
+    - name: 'validate "test (should fail): invalid input: resultType"'
+      run: |-
+        [ '${{steps.error-input-resultType.outcome}}' = failure ]
