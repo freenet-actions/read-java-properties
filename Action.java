@@ -125,7 +125,9 @@ enum ResultWriter {
 	JSON_FILE("json-file") {
 		@Override
 		public void write(Properties props, Input input) throws IOException {
-			try (Writer writer = Util.openFile(input.requiredResultTypeArg(), StandardOpenOption.CREATE)) {
+			String outputFile = input.requiredResultTypeArg();
+			Files.createDirectories((Paths.get(outputFile).getParent()));
+			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE)) {
 				writer.write(Util.toJson(props));
 				writer.write('\n');
 				writer.flush();
