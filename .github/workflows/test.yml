@@ -70,8 +70,8 @@ jobs:
         RESULT: ${{steps.all-json.outputs.json}}
       run: |-
         jq <<<"$RESULT"
-        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '.unicode_escapes')" 'a«,»c'
-        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '["colon:in:Key"]')" c
+        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '.unicode_escapes' <<<"$RESULT")" 'a«,»c'
+        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '["colon:in:Key"]' <<<"$RESULT")" c
 
     - name: 'test: query multiple properties as JSON action output'
       id: multiple-json
@@ -104,6 +104,13 @@ jobs:
   test-all-env:
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ github.head_ref }}
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
     - name: 'test: query all properties as environment variables'
       uses: ./
       with:
@@ -120,6 +127,13 @@ jobs:
   test-multi-env:
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ github.head_ref }}
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
     - name: 'test: query multiple properties as environment variables'
       uses: ./
       with:
