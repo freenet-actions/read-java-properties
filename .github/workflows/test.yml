@@ -7,6 +7,8 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      SORT_OBJECT_JQ_EXPR: 'to_entries | sort_by(.key) []'
     steps:
 
     - name: Checkout
@@ -55,3 +57,73 @@ jobs:
       run: |-
         [ "$RESULT_SJV" = 21 ]
         [ "$RESULT_TJV" = 17 ]
+
+    - name: 'test: query all properties as environment variables'
+      id: all-env
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: env
+    - name: 'validate "test: query all properties as environment variables"'
+      run: |-
+        [ "$sourceJavaVersion" = 21 ]
+        [ "$targetJavaVersion" = 17 ]
+        [ "$org.gradle.jvmargs" = '-ea -showversion' ]
+        [ "$whitespace_escapes" = $'a\fb\rc\n' ]
+        [ "$unicode_escapes" = 'a«,»c' ]
+
+    - name: 'test: query multiple properties as environment variables'
+      id: multi-env
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: 'sourceJavaVersion org.gradle.jvmargs unicode_escapes'
+        resultType: env
+    - name: 'validate "test: query multiple properties as environment variables"'
+      run: |-
+        [ "$sourceJavaVersion" = 21 ]
+        [ "$org.gradle.jvmargs" = '-ea -showversion' ]
+        [ "$unicode_escapes" = 'a«,»c' ]
+        [ "$targetJavaVersion" = '' ]
+        [ "$whitespace_escapes" = '' ]
+
+    - name: 'test: query all properties as JSON action output'
+      id: all-json
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: json
+    - name: 'validate "test: query all properties as JSON action output"'
+      env:
+        RESULT: ${{steps.all-json.outputs.json}}
+      run: |-
+        jq <<<"$RESULT"
+        [ "$(jq --raw-output '.unicode_escapes')" = 'a«,»c' ]
+        [ "$(jq --raw-output '.["colon:in:Key"]')" = c ]
+
+    - name: 'test: query multiple properties as JSON action output'
+      id: multiple-json
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: 'colon:in:Key unicode_escapes'
+        resultType: json
+    - name: 'validate "test: query multiple properties as JSON action output"'
+      env:
+        RESULT: ${{steps.multiple-json.outputs.json}}
+      run: |-
+        diff --minimal \
+          <(jq --null-input --arg col c --arg uni 'a«,»c' '{ "colon:in:Key": $col, "unicode_escapes": $uni }'"| $SORT_OBJECT_JQ_EXPR") \
+          <(jq "$SORT_OBJECT_JQ_EXPR" <<<"$RESULT")
+
+    - name: 'test: query multiple properties as JSON file'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: 'colon:in:Key unicode_escapes'
+        resultType: json-file:tmp/multi.json
+    - name: 'validate "test: query multiple properties as JSON file"'
+      run: |-
+        diff --minimal \
+          <(jq --null-input --arg col c --arg uni 'a«,»c' '{ "colon:in:Key": $col, "unicode_escapes": $uni }'"| $SORT_OBJECT_JQ_EXPR") \
+          <(jq "$SORT_OBJECT_JQ_EXPR" <tmp/multi.json)
