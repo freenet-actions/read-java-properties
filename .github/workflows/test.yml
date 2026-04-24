@@ -70,8 +70,8 @@ jobs:
         RESULT: ${{steps.all-json.outputs.json}}
       run: |-
         jq <<<"$RESULT"
-        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '.unicode_escapes' <<<"$RESULT")" 'a«,»c'
-        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '["colon:in:Key"]' <<<"$RESULT")" c
+        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '.unicode_escapes'  <<<"$RESULT")" 'a«,»c'
+        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '.["colon:in:Key"]' <<<"$RESULT")" c
 
     - name: 'test: query multiple properties as JSON action output'
       id: multiple-json
