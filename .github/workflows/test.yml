@@ -3,7 +3,7 @@ on: pull_request
 
 jobs:
   test:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu
     defaults:
       run:
         shell: bash
