@@ -42,13 +42,13 @@ jobs:
         [ "$RESULT2" = 17 ]
         [ "$RESULT3" = '-ea -showversion' ]
 
-    - name: 'test: query all properties as action outputs'
+    - name: 'test: query multiple properties as action outputs'
       id: multi-output
       uses: ./
       with:
         file: test/resources/test.properties
-        keys: sourceJavaVersion,targetJavaVersion
-    - name: 'validate "test: query all properties as action outputs"'
+        keys: 'sourceJavaVersion targetJavaVersion'
+    - name: 'validate "test: query multiple properties as action outputs"'
       env:
         RESULT1: ${{steps.multi-output.outputs._sourceJavaVersion}}
         RESULT2: ${{steps.multi-output.outputs._targetJavaVersion}}
