@@ -70,7 +70,7 @@ jobs:
       run: |-
         bash -c "$ASSERT_EQUALS" -- "$sourceJavaVersion"  21
         bash -c "$ASSERT_EQUALS" -- "$targetJavaVersion"  17
-        bash -c "$ASSERT_EQUALS" -- "$org.gradle.jvmargs" '-ea -showversion'
+        bash -c "$ASSERT_EQUALS" -- "$(printenv org.gradle.jvmargs)" '-ea -showversion'
         bash -c "$ASSERT_EQUALS" -- "$whitespace_escapes" $'a\fb\rc\n'
         bash -c "$ASSERT_EQUALS" -- "$unicode_escapes"    'a«,»c'
 
@@ -84,7 +84,7 @@ jobs:
     - name: 'validate "test: query multiple properties as environment variables"'
       run: |-
         bash -c "$ASSERT_EQUALS" -- "$sourceJavaVersion"  21
-        bash -c "$ASSERT_EQUALS" -- "$org.gradle.jvmargs" '-ea -showversion'
+        bash -c "$ASSERT_EQUALS" -- "$(printenv org.gradle.jvmargs)" '-ea -showversion'
         bash -c "$ASSERT_EQUALS" -- "$unicode_escapes"    'a«,»c'
         bash -c "$ASSERT_EQUALS" -- "$targetJavaVersion"  ''
         bash -c "$ASSERT_EQUALS" -- "$whitespace_escapes" ''
