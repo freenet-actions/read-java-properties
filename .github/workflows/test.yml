@@ -15,12 +15,11 @@ jobs:
         ref: ${{ github.head_ref }}
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
-        path: repo
 
     - name: 'test (should fail): invalid input: resultType'
       id: error-input-resultType
       continue-on-error: true
-      uses: ./repo
+      uses: ./
       with:
         file: test/resources/test.properties
         resultType: rt1
@@ -30,7 +29,7 @@ jobs:
 
     - name: 'test: query all properties as action outputs'
       id: all-output
-      uses: ./repo
+      uses: ./
       with:
         file: test/resources/test.properties
     - name: 'validate "test: query all properties as action outputs"'
@@ -45,7 +44,7 @@ jobs:
 
     - name: 'test: query all properties as action outputs'
       id: multi-output
-      uses: ./repo
+      uses: ./
       with:
         file: test/resources/test.properties
         keys: sourceJavaVersion,targetJavaVersion
