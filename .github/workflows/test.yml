@@ -20,7 +20,7 @@ jobs:
     - name: 'test (should fail): invalid input: resultType'
       id: error-input-resultType
       continue-on-error: true
-      uses: ./repo/action.yml
+      uses: ./repo
       with:
         file: test/resources/test.properties
         resultType: rt1
@@ -30,7 +30,7 @@ jobs:
 
     - name: 'test: query all properties as action outputs'
       id: all-output
-      uses: ./repo/action.yml
+      uses: ./repo
       with:
         file: test/resources/test.properties
     - name: 'validate "test: query all properties as action outputs"'
@@ -45,7 +45,7 @@ jobs:
 
     - name: 'test: query all properties as action outputs'
       id: multi-output
-      uses: ./repo/action.yml
+      uses: ./repo
       with:
         file: test/resources/test.properties
         keys: sourceJavaVersion,targetJavaVersion
