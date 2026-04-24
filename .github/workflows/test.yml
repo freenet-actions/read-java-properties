@@ -34,13 +34,13 @@ jobs:
         file: test/resources/test.properties
     - name: 'validate "test: query all properties as action outputs"'
       env:
-        RESULT1: ${{steps.all-output.outputs._sourceJavaVersion}}
-        RESULT2: ${{steps.all-output.outputs._targetJavaVersion}}
-        RESULT3: ${{steps.all-output.outputs._org-002Egradle-002Ejvmargs}}
+        RESULT_SJV: ${{steps.all-output.outputs._sourceJavaVersion}}
+        RESULT_TJV: ${{steps.all-output.outputs._targetJavaVersion}}
+        RESULT_GRO: ${{steps.all-output.outputs._org-002Egradle-002Ejvmargs}}
       run: |-
-        [ "$RESULT1" = 21 ]
-        [ "$RESULT2" = 17 ]
-        [ "$RESULT3" = '-ea -showversion' ]
+        [ "$RESULT_SJV" = 21 ]
+        [ "$RESULT_TJV" = 17 ]
+        [ "$RESULT_GRO" = '-ea -showversion' ]
 
     - name: 'test: query multiple properties as action outputs'
       id: multi-output
@@ -50,8 +50,8 @@ jobs:
         keys: 'sourceJavaVersion targetJavaVersion'
     - name: 'validate "test: query multiple properties as action outputs"'
       env:
-        RESULT1: ${{steps.multi-output.outputs._sourceJavaVersion}}
-        RESULT2: ${{steps.multi-output.outputs._targetJavaVersion}}
+        RESULT_SJV: ${{steps.multi-output.outputs._sourceJavaVersion}}
+        RESULT_TJV: ${{steps.multi-output.outputs._targetJavaVersion}}
       run: |-
-        [ "$RESULT1" = 21 ]
-        [ "$RESULT2" = 17 ]
+        [ "$RESULT_SJV" = 21 ]
+        [ "$RESULT_TJV" = 17 ]

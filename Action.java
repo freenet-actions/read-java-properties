@@ -185,7 +185,7 @@ enum GitHubOutputFile {
 	}
 
 	public GitHubVariableWriter open() throws IOException {
-		return new GitHubVariableWriter(fileName, keyReplacer);
+		return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName, keyReplacer);
 	}
 
 	private static String encodeOutputValue(String value) {
@@ -203,16 +203,19 @@ enum GitHubOutputFile {
 class GitHubVariableWriter implements AutoCloseable {
 	private static final Pattern SIMPLE_VALUE = Pattern.compile("[\\w.-]+");
 
+	private final String description;
 	private final Function<String, String> keyReplacer;
 	private final Writer writer;
 
-	public GitHubVariableWriter(String fileName, Function<String, String> valueReplacer) throws IOException {
+	public GitHubVariableWriter(String description, String fileName, Function<String, String> valueReplacer) throws IOException {
+		this.description = description;
 		this.writer = Util.openFile(fileName, StandardOpenOption.APPEND);
 		this.keyReplacer = Objects.requireNonNull(valueReplacer);
 	}
 
 	public void write(String key, String value) throws IOException {
 		String encodedKey = keyReplacer.apply(key);
+		System.err.format("%s %s\t:= \"%s\"\n", description, encodedKey, value);
 
 		// write (very) simple values in format "<key>=<value>":
 		if (SIMPLE_VALUE.matcher(value).matches()) {
