@@ -5,7 +5,7 @@ defaults:
     shell: bash
 env:
   ASSERT_EQUALS: >-
-    [ "$1" = "$2" ] || { printf 'assertion error: "%s" != "%s"\n' "$1" "$2" >&2; exit 1; }
+    if [ "$1" = "$2" ]; then printf 'ok: "%s" == "%s"\n' "$1" "$2" >&2; else printf 'assertion error: "%s" != "%s"\n' "$1" "$2" >&2; exit 1; fi
   SORT_OBJECT_JQ_EXPR: 'to_entries | sort_by(.key) []'
 
 jobs:
