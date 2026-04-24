@@ -49,5 +49,6 @@ runs:
   env:
     KEYS: ${{inputs.keys}}
     KEY_SEPARATOR: ${{inputs.keySeparator}}
+    RESULT_NAME_SEPARATOR: ${{inputs.resultNameSeparator}}
     RESULT_TYPE: ${{inputs.resultType}}
     OUTPUT_PREFIX: '_'
