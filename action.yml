@@ -1,0 +1,54 @@
+name: Read Java Properties File
+author: freenet-actions
+description: >-
+  Read Java properties file and return one or more as property values as plain text or JSON.
+
+inputs:
+  file:
+    description: the properties file name
+    required: true
+  keys:
+    description: |-
+      Selects the property keys (names). Format: `keySeparator`-separated list.
+      If not specified or empty, all properties are returned.
+    required: false
+  keySeparator:
+    description: 'The separator string used in `keys`'
+    required: false
+    default: ' '
+  resultNameSeparator:
+    description: 'The separator string used in some types of `resultType`'
+    required: false
+    default: ' '
+  resultType:
+    description: |-
+      The result format and target. One of:
+      - "output": For each property key <k>, set an output named "_<k>". (The leading underscore serves to avoid conflicts with future output names used by this action.) Additionally, set output "value" to the last found value (which is only usefull if `keys` is non-empty, i.e. last given key wins; without keys, the last property in the undefined java.util.Properties iteration order wins).
+      - "output-named:<names>": <names> is a `resultNameSeparator`-separated list of output names of the same length as (the `keySeparator`-separated list) `keys`. The value for `keys[i]` is set as output `<names>[i]`. In order not to hide any future builtin outputs of this action, it is recommended to prefix each name with an underscore ("_"). In this mode, `keys` is required.
+      - "output-named:<name>": Special case: A single name is supported even with multiple `keys`. All found values for the keys are set as the same output; the last found key wins. In this mode, `keys` is required.
+      - "env": For each property key <k>, set an environment variable <k>.
+      - "env:<prefix>": For each property key <k>, set an environment variable <prefix><k>.
+      - "env-named:<names>": <names> is a `resultNameSeparator`-separated list of variable names of the same length as (the `keySeparator`-separated list) `keys`. The value for `keys[i]` is set as environment variable `<names>[i]`. In this mode, `keys` is required.
+      - "env-named:<name>": Special case: A single name is supported even with multiple `keys`. All found values for the keys are set as the same environment variable; the last found key wins. In this mode, `keys` is required.
+      - "json": Set an action output "json" to all properties as a JSON object, formatted as a single-line string.
+      - "json-file:<name>": Write a file with name <name> with contents: all properties as a JSON object (formatting not specified).
+    required: false
+    default: 'output'
+
+outputs:
+  value:
+    description: The (plain) property value. Only set in certain modes, see input `resultType`.
+  json:
+    description: All found properties matching the `keys` input as a single-line JSON object. Only set in certain modes, see input `resultType`.
+
+runs:
+  using: docker
+  image: Dockerfile
+  args:
+    - ${{inputs.file}}
+  env:
+    KEYS: ${{inputs.keys}}
+    KEY_SEPARATOR: ${{inputs.keySeparator}}
+    RESULT_NAME_SEPARATOR: ${{inputs.resultNameSeparator}}
+    RESULT_TYPE: ${{inputs.resultType}}
+    OUTPUT_PREFIX: '_'

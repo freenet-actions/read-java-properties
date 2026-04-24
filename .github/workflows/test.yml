@@ -3,12 +3,55 @@ on: pull_request
 
 jobs:
   test:
-    runs-on: ubuntu
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
     steps:
 
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ github.head_ref }}
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 'test (should fail): invalid input: resultType'
+      id: error-input-resultType
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: rt1
     - name: 'validate "test (should fail): invalid input: resultType"'
       run: |-
         [ '${{steps.error-input-resultType.outcome}}' = failure ]
+
+    - name: 'test: query all properties as action outputs'
+      id: all-output
+      uses: ./
+      with:
+        file: test/resources/test.properties
+    - name: 'validate "test: query all properties as action outputs"'
+      env:
+        RESULT1: ${{steps.all-output.outputs._sourceJavaVersion}}
+        RESULT2: ${{steps.all-output.outputs._targetJavaVersion}}
+        RESULT3: ${{steps.all-output.outputs._org.gradle.jvmargs}}
+      run: |-
+        [ "$RESULT1" = 21 ]
+        [ "$RESULT2" = 17 ]
+        [ "$RESULT3" = '-ea -showversion' ]
+
+    - name: 'test: query all properties as action outputs'
+      id: multi-output
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: sourceJavaVersion,targetJavaVersion
+    - name: 'validate "test: query all properties as action outputs"'
+      env:
+        RESULT1: ${{steps.multi-output.outputs._sourceJavaVersion}}
+        RESULT2: ${{steps.multi-output.outputs._targetJavaVersion}}
+      run: |-
+        [ "$RESULT1" = 21 ]
+        [ "$RESULT2" = 17 ]
