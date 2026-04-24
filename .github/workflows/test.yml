@@ -36,7 +36,7 @@ jobs:
       env:
         RESULT1: ${{steps.all-output.outputs._sourceJavaVersion}}
         RESULT2: ${{steps.all-output.outputs._targetJavaVersion}}
-        RESULT3: ${{steps.all-output.outputs._org.gradle.jvmargs}}
+        RESULT3: ${{steps.all-output.outputs._org-002Egradle-002Ejvmargs}}
       run: |-
         [ "$RESULT1" = 21 ]
         [ "$RESULT2" = 17 ]

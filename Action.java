@@ -13,9 +13,11 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -167,16 +169,33 @@ enum ResultWriter {
 
 
 enum GitHubOutputFile {
-	OUTPUT("GITHUB_OUTPUT"), ENV("GITHUB_ENV");
+	OUTPUT("GITHUB_OUTPUT", v -> encodeOutputValue(v)), //
+	ENV("GITHUB_ENV");
 
 	private final String fileName;
+	private final Function<String, String> keyReplacer;
 
 	private GitHubOutputFile(String fileNameEnvVar) {
+		this(fileNameEnvVar, v -> v);
+	}
+
+	private GitHubOutputFile(String fileNameEnvVar, Function<String, String> valueReplacer) {
 		this.fileName = Util.getRequiredEnv(fileNameEnvVar);
+		this.keyReplacer = valueReplacer;
 	}
 
 	public GitHubVariableWriter open() throws IOException {
-		return new GitHubVariableWriter(fileName);
+		return new GitHubVariableWriter(fileName, keyReplacer);
+	}
+
+	private static String encodeOutputValue(String value) {
+		StringBuilder result = new StringBuilder(value.length() + 4);
+		Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(value);
+		while (matcher.find()) {
+			matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
+		}
+		matcher.appendTail(result);
+		return result.toString();
 	}
 }
 
@@ -184,16 +203,20 @@ enum GitHubOutputFile {
 class GitHubVariableWriter implements AutoCloseable {
 	private static final Pattern SIMPLE_VALUE = Pattern.compile("[\\w.-]+");
 
+	private final Function<String, String> keyReplacer;
 	private final Writer writer;
 
-	public GitHubVariableWriter(String fileName) throws IOException {
+	public GitHubVariableWriter(String fileName, Function<String, String> valueReplacer) throws IOException {
 		this.writer = Util.openFile(fileName, StandardOpenOption.APPEND);
+		this.keyReplacer = Objects.requireNonNull(valueReplacer);
 	}
 
 	public void write(String key, String value) throws IOException {
+		String encodedKey = keyReplacer.apply(key);
+
 		// write (very) simple values in format "<key>=<value>":
 		if (SIMPLE_VALUE.matcher(value).matches()) {
-			this.writer.write(key);
+			this.writer.write(encodedKey);
 			this.writer.write('=');
 			this.writer.write(value);
 			this.writer.write('\n');
@@ -210,7 +233,7 @@ class GitHubVariableWriter implements AutoCloseable {
 
 		// write in multiline format
 		// [https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#multiline-strings]:
-		this.writer.write(key);
+		this.writer.write(encodedKey);
 		this.writer.write("<<");
 		this.writer.write(separator);
 		this.writer.write('\n');

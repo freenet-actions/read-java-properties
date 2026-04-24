@@ -32,6 +32,10 @@ inputs:
       - "env-named:<name>": Special case: A single name is supported even with multiple `keys`. All found values for the keys are set as the same environment variable; the last found key wins. In this mode, `keys` is required.
       - "json": Set an action output "json" to all properties as a JSON object, formatted as a single-line string.
       - "json-file:<name>": Write a file with name <name> with contents: all properties as a JSON object (formatting not specified).
+  
+      For all output names, punctuation characters except the underscore ("_") are replaced with "-" followed by four hex digits
+      of its unicode code point. For example, for a property key "a.b-c_d", resultType "output" sets an output with name
+      "a-002Eb-002Dc_d".  
     required: false
     default: 'output'
 
