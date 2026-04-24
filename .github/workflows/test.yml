@@ -8,6 +8,8 @@ jobs:
       run:
         shell: bash
     env:
+      ASSERT_EQUALS: >-
+        [ "$1" = "$2" ] || { printf 'assertion error: "%s" != "%s"\n' "$1" "$2" >&2; exit 1; }
       SORT_OBJECT_JQ_EXPR: 'to_entries | sort_by(.key) []'
     steps:
 
@@ -27,7 +29,7 @@ jobs:
         resultType: rt1
     - name: 'validate "test (should fail): invalid input: resultType"'
       run: |-
-        [ '${{steps.error-input-resultType.outcome}}' = failure ]
+        bash -c "$ASSERT_EQUALS" -- '${{steps.error-input-resultType.outcome}}' failure
 
     - name: 'test: query all properties as action outputs'
       id: all-output
@@ -40,9 +42,9 @@ jobs:
         RESULT_TJV: ${{steps.all-output.outputs._targetJavaVersion}}
         RESULT_GRO: ${{steps.all-output.outputs._org-002Egradle-002Ejvmargs}}
       run: |-
-        [ "$RESULT_SJV" = 21 ]
-        [ "$RESULT_TJV" = 17 ]
-        [ "$RESULT_GRO" = '-ea -showversion' ]
+        bash -c "$ASSERT_EQUALS" -- "$RESULT_SJV" 21
+        bash -c "$ASSERT_EQUALS" -- "$RESULT_TJV" 17
+        bash -c "$ASSERT_EQUALS" -- "$RESULT_GRO" '-ea -showversion'
 
     - name: 'test: query multiple properties as action outputs'
       id: multi-output
@@ -55,8 +57,8 @@ jobs:
         RESULT_SJV: ${{steps.multi-output.outputs._sourceJavaVersion}}
         RESULT_TJV: ${{steps.multi-output.outputs._targetJavaVersion}}
       run: |-
-        [ "$RESULT_SJV" = 21 ]
-        [ "$RESULT_TJV" = 17 ]
+        bash -c "$ASSERT_EQUALS" "$RESULT_SJV" 21
+        bash -c "$ASSERT_EQUALS" "$RESULT_TJV" 17
 
     - name: 'test: query all properties as environment variables'
       id: all-env
@@ -66,11 +68,11 @@ jobs:
         resultType: env
     - name: 'validate "test: query all properties as environment variables"'
       run: |-
-        [ "$sourceJavaVersion" = 21 ]
-        [ "$targetJavaVersion" = 17 ]
-        [ "$org.gradle.jvmargs" = '-ea -showversion' ]
-        [ "$whitespace_escapes" = $'a\fb\rc\n' ]
-        [ "$unicode_escapes" = 'a«,»c' ]
+        bash -c "$ASSERT_EQUALS" -- "$sourceJavaVersion"  21
+        bash -c "$ASSERT_EQUALS" -- "$targetJavaVersion"  17
+        bash -c "$ASSERT_EQUALS" -- "$org.gradle.jvmargs" '-ea -showversion'
+        bash -c "$ASSERT_EQUALS" -- "$whitespace_escapes" $'a\fb\rc\n'
+        bash -c "$ASSERT_EQUALS" -- "$unicode_escapes"    'a«,»c'
 
     - name: 'test: query multiple properties as environment variables'
       id: multi-env
@@ -81,11 +83,11 @@ jobs:
         resultType: env
     - name: 'validate "test: query multiple properties as environment variables"'
       run: |-
-        [ "$sourceJavaVersion" = 21 ]
-        [ "$org.gradle.jvmargs" = '-ea -showversion' ]
-        [ "$unicode_escapes" = 'a«,»c' ]
-        [ "$targetJavaVersion" = '' ]
-        [ "$whitespace_escapes" = '' ]
+        bash -c "$ASSERT_EQUALS" -- "$sourceJavaVersion"  21
+        bash -c "$ASSERT_EQUALS" -- "$org.gradle.jvmargs" '-ea -showversion'
+        bash -c "$ASSERT_EQUALS" -- "$unicode_escapes"    'a«,»c'
+        bash -c "$ASSERT_EQUALS" -- "$targetJavaVersion"  ''
+        bash -c "$ASSERT_EQUALS" -- "$whitespace_escapes" ''
 
     - name: 'test: query all properties as JSON action output'
       id: all-json
@@ -98,8 +100,8 @@ jobs:
         RESULT: ${{steps.all-json.outputs.json}}
       run: |-
         jq <<<"$RESULT"
-        [ "$(jq --raw-output '.unicode_escapes')" = 'a«,»c' ]
-        [ "$(jq --raw-output '.["colon:in:Key"]')" = c ]
+        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '.unicode_escapes')" 'a«,»c'
+        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '["colon:in:Key"]')" c
 
     - name: 'test: query multiple properties as JSON action output'
       id: multiple-json
