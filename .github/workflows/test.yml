@@ -57,8 +57,8 @@ jobs:
         RESULT_SJV: ${{steps.multi-output.outputs._sourceJavaVersion}}
         RESULT_TJV: ${{steps.multi-output.outputs._targetJavaVersion}}
       run: |-
-        bash -c "$ASSERT_EQUALS" "$RESULT_SJV" 21
-        bash -c "$ASSERT_EQUALS" "$RESULT_TJV" 17
+        bash -c "$ASSERT_EQUALS" -- "$RESULT_SJV" 21
+        bash -c "$ASSERT_EQUALS" -- "$RESULT_TJV" 17
 
     - name: 'test: query all properties as environment variables'
       id: all-env
