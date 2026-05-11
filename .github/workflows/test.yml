@@ -4,9 +4,16 @@ defaults:
   run:
     shell: bash
 env:
-  ASSERT_EQUALS: >-
-    if [ "$1" = "$2" ]; then printf 'ok: "%s" == "%s"\n' "$1" "$2" >&2; else printf 'assertion error: "%s" != "%s"\n' "$1" "$2" >&2; exit 1; fi
-  SORT_OBJECT_JQ_EXPR: 'to_entries | sort_by(.key) []'
+  SHELL_SETUP: >-
+    function assertEquals() {
+      if [ "$1" = "$2" ]; then
+        printf 'ok: "%s" == "%s"\n' "$1" "$2" >&2
+      else
+        printf 'assertion error: "%s" != "%s"\n' "$1" "$2" >&2
+        return 1
+      fi
+    }
+    sortObjectJqExpr='to_entries | sort_by(.key) []'
 
 jobs:
   test:
@@ -29,7 +36,8 @@ jobs:
         resultType: rt1
     - name: 'validate "test (should fail): invalid input: resultType"'
       run: |-
-        bash -c "$ASSERT_EQUALS" -- '${{steps.error-input-resultType.outcome}}' failure
+        eval "$SHELL_SETUP"
+        assertEquals '${{steps.error-input-resultType.outcome}}' failure
 
     - name: 'test: query all properties as action outputs'
       id: all-output
@@ -42,9 +50,10 @@ jobs:
         RESULT_TJV: ${{steps.all-output.outputs._targetJavaVersion}}
         RESULT_GRO: ${{steps.all-output.outputs._org-002Egradle-002Ejvmargs}}
       run: |-
-        bash -c "$ASSERT_EQUALS" -- "$RESULT_SJV" 21
-        bash -c "$ASSERT_EQUALS" -- "$RESULT_TJV" 17
-        bash -c "$ASSERT_EQUALS" -- "$RESULT_GRO" '-ea -showversion'
+        eval "$SHELL_SETUP"
+        assertEquals "$RESULT_SJV" 21
+        assertEquals "$RESULT_TJV" 17
+        assertEquals "$RESULT_GRO" '-ea -showversion'
 
     - name: 'test: query multiple properties as action outputs'
       id: multi-output
@@ -57,8 +66,9 @@ jobs:
         RESULT_SJV: ${{steps.multi-output.outputs._sourceJavaVersion}}
         RESULT_TJV: ${{steps.multi-output.outputs._targetJavaVersion}}
       run: |-
-        bash -c "$ASSERT_EQUALS" -- "$RESULT_SJV" 21
-        bash -c "$ASSERT_EQUALS" -- "$RESULT_TJV" 17
+        eval "$SHELL_SETUP"
+        assertEquals "$RESULT_SJV" 21
+        assertEquals "$RESULT_TJV" 17
 
     - name: 'test: query all properties as JSON action output'
       id: all-json
@@ -70,9 +80,10 @@ jobs:
       env:
         RESULT: ${{steps.all-json.outputs.json}}
       run: |-
-        jq <<<"$RESULT"
-        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '.unicode_escapes'  <<<"$RESULT")" 'a«,»c'
-        bash -c "$ASSERT_EQUALS" -- "$(jq --raw-output '.["colon:in:Key"]' <<<"$RESULT")" c
+        eval "$SHELL_SETUP"
+        jq <<<"$RESULT" # assert parseable (and print)
+        assertEquals "$(jq --raw-output '.unicode_escapes'  <<<"$RESULT")" 'a«,»c'
+        assertEquals "$(jq --raw-output '.["colon:in:Key"]' <<<"$RESULT")" c
 
     - name: 'test: query multiple properties as JSON action output'
       id: multiple-json
@@ -86,8 +97,8 @@ jobs:
         RESULT: ${{steps.multiple-json.outputs.json}}
       run: |-
         diff --minimal \
-          <(jq --null-input --arg col c --arg uni 'a«,»c' '{ "colon:in:Key": $col, "unicode_escapes": $uni }'"| $SORT_OBJECT_JQ_EXPR") \
-          <(jq "$SORT_OBJECT_JQ_EXPR" <<<"$RESULT")
+          <(jq --null-input --arg col c --arg uni 'a«,»c' '{ "colon:in:Key": $col, "unicode_escapes": $uni }'"| $sortObjectJqExpr") \
+          <(jq "$sortObjectJqExpr" <<<"$RESULT")
 
     - name: 'test: query multiple properties as JSON file'
       uses: ./
@@ -98,8 +109,8 @@ jobs:
     - name: 'validate "test: query multiple properties as JSON file"'
       run: |-
         diff --minimal \
-          <(jq --null-input --arg col c --arg uni 'a«,»c' '{ "colon:in:Key": $col, "unicode_escapes": $uni }'"| $SORT_OBJECT_JQ_EXPR") \
-          <(jq "$SORT_OBJECT_JQ_EXPR" <tmp/multi.json)
+          <(jq --null-input --arg col c --arg uni 'a«,»c' '{ "colon:in:Key": $col, "unicode_escapes": $uni }'"| $sortObjectJqExpr") \
+          <(jq "$sortObjectJqExpr" <tmp/multi.json)
 
   # Each test which sets environment variables is a separate job to be independant of other tests.
   test-all-env:
@@ -113,11 +124,12 @@ jobs:
         resultType: env
     - name: 'validate "test: query all properties as environment variables"'
       run: |-
-        bash -c "$ASSERT_EQUALS" -- "$sourceJavaVersion"  21
-        bash -c "$ASSERT_EQUALS" -- "$targetJavaVersion"  17
-        bash -c "$ASSERT_EQUALS" -- "$(printenv org.gradle.jvmargs)" '-ea -showversion'
-        bash -c "$ASSERT_EQUALS" -- "$whitespace_escapes" $'a\fb\rc\n'
-        bash -c "$ASSERT_EQUALS" -- "$unicode_escapes"    'a«,»c'
+        eval "$SHELL_SETUP"
+        assertEquals "$sourceJavaVersion"  21
+        assertEquals "$targetJavaVersion"  17
+        assertEquals "$(printenv org.gradle.jvmargs)" '-ea -showversion'
+        assertEquals "$whitespace_escapes" $'a\fb\rc\n'
+        assertEquals "$unicode_escapes"    'a«,»c'
 
   test-multi-env:
     runs-on: ubuntu-latest
@@ -131,9 +143,9 @@ jobs:
         resultType: env
     - name: 'validate "test: query multiple properties as environment variables"'
       run: |-
-        bash -c "$ASSERT_EQUALS" -- "$sourceJavaVersion"  21
-        bash -c "$ASSERT_EQUALS" -- "$(printenv org.gradle.jvmargs)" '-ea -showversion'
-        bash -c "$ASSERT_EQUALS" -- "$unicode_escapes"    'a«,»c'
-        bash -c "$ASSERT_EQUALS" -- "$targetJavaVersion"  ''
-        bash -c "$ASSERT_EQUALS" -- "$whitespace_escapes" ''
-
+        eval "$SHELL_SETUP"
+        assertEquals "$sourceJavaVersion"  21
+        assertEquals "$(printenv org.gradle.jvmargs)" '-ea -showversion'
+        assertEquals "$unicode_escapes"    'a«,»c'
+        assertEquals "$targetJavaVersion"  ''
+        assertEquals "$whitespace_escapes" ''
