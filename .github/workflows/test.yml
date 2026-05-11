@@ -109,7 +109,7 @@ jobs:
       uses: ./
       with:
         file: test/resources/test.properties
-        keys: 'colon:in:Key unicode_escapes'
+        keys: 'colon:in:Key colonInValue unicode_escapes'
         resultType: json-file:tmp/multi.json
     - name: 'validate "test: query multiple properties as JSON file"'
       run: |-
