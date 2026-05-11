@@ -12,7 +12,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
+    - &checkoutStep
+      name: Checkout
       uses: actions/checkout@v6
       with:
         ref: ${{ github.head_ref }}
@@ -104,13 +105,7 @@ jobs:
   test-all-env:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v6
-      with:
-        ref: ${{ github.head_ref }}
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
-
+    - *checkoutStep
     - name: 'test: query all properties as environment variables'
       uses: ./
       with:
@@ -127,13 +122,7 @@ jobs:
   test-multi-env:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v6
-      with:
-        ref: ${{ github.head_ref }}
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
-
+    - *checkoutStep
     - name: 'test: query multiple properties as environment variables'
       uses: ./
       with:
