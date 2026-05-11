@@ -4,7 +4,7 @@ defaults:
   run:
     shell: bash
 env:
-  SHELL_SETUP: >-
+  SHELL_SETUP: |-
     function assertEquals() {
       if [ "$1" = "$2" ]; then
         printf 'ok: "%s" == "%s"\n' "$1" "$2" >&2
@@ -12,8 +12,8 @@ env:
         printf 'assertion error: "%s" != "%s"\n' "$1" "$2" >&2
         return 1
       fi
-    };
-    sortObjectJqExpr='to_entries | sort_by(.key) []';
+    }
+    sortObjectJqExpr='to_entries | sort_by(.key) []'
 
 jobs:
   test:
