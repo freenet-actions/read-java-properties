@@ -13,6 +13,10 @@ env:
         return 1
       fi
     }
+    function jsonGet() {
+      local key=$1; shift
+      jq --arg k "$key" --raw-output '.[$k] // ""'
+    }
 
 jobs:
   test:
@@ -82,8 +86,8 @@ jobs:
         eval "$SHELL_SETUP"
         jq <<<"$RESULT" # assert parseable (and print)
         # check some values:
-        assertEquals "$(jq --raw-output '.unicode_escapes'  <<<"$RESULT")" 'a«,»c'
-        assertEquals "$(jq --raw-output '.["colon:in:Key"]' <<<"$RESULT")" 'c'
+        assertEquals "$(jsonGet 'unicode_escapes' <<<"$RESULT")" 'a«,»c'
+        assertEquals "$(jsonGet 'colon:in:Key'    <<<"$RESULT")" 'c'
         # assert size >= 10:
         test "$(jq --raw-output 'keys | length' <<<"$RESULT")" -ge 10
 
@@ -99,9 +103,9 @@ jobs:
         RESULT: ${{steps.multiple-json.outputs.json}}
       run: |-
         eval "$SHELL_SETUP"
-        assertEquals "$(jq --raw-output '.unicode_escapes'  <<<"$RESULT")" 'a«,»c'
-        assertEquals "$(jq --raw-output '.colonInValue'     <<<"$RESULT")" 'cv:'
-        assertEquals "$(jq --raw-output '.["colon:in:Key"]' <<<"$RESULT")" 'c'
+        assertEquals "$(jsonGet 'unicode_escapes' <<<"$RESULT")" 'a«,»c'
+        assertEquals "$(jsonGet 'colonInValue'    <<<"$RESULT")" 'cv:'
+        assertEquals "$(jsonGet 'colon:in:Key'    <<<"$RESULT")" 'c'
         # assert size 3 (i.e. no additional results):
         assertEquals "$(jq --raw-output 'keys | length' <<<"$RESULT")" 3
 
@@ -114,11 +118,12 @@ jobs:
     - name: 'validate "test: query multiple properties as JSON file"'
       run: |-
         eval "$SHELL_SETUP"
-        assertEquals "$(jq --raw-output '.unicode_escapes'  <tmp/multi.json)" 'a«,»c'
-        assertEquals "$(jq --raw-output '.colonInValue'     <tmp/multi.json)" 'cv:'
-        assertEquals "$(jq --raw-output '.["colon:in:Key"]' <tmp/multi.json)" 'c'
+        result=$(<tmp/multi.json) # read file only once
+        assertEquals "$(jsonGet 'unicode_escapes' <<<"$result")" 'a«,»c'
+        assertEquals "$(jsonGet 'colonInValue'    <<<"$result")" 'cv:'
+        assertEquals "$(jsonGet 'colon:in:Key'    <<<"$result")" 'c'
         # assert size 2 (i.e. no additional results):
-        assertEquals "$(jq --raw-output 'keys | length' <tmp/multi.json)" 3
+        assertEquals "$(jq --raw-output 'keys | length' <<<"$result")" 3
 
   # Each test which sets environment variables is a separate job to be independant of other tests.
   test-all-env:
