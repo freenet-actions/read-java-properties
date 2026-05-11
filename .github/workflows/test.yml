@@ -96,6 +96,7 @@ jobs:
       env:
         RESULT: ${{steps.multiple-json.outputs.json}}
       run: |-
+        eval "$SHELL_SETUP"
         diff --minimal \
           <(jq --null-input --arg col c --arg uni 'a«,»c' '{ "colon:in:Key": $col, "unicode_escapes": $uni }'"| $sortObjectJqExpr") \
           <(jq "$sortObjectJqExpr" <<<"$RESULT")
@@ -108,6 +109,7 @@ jobs:
         resultType: json-file:tmp/multi.json
     - name: 'validate "test: query multiple properties as JSON file"'
       run: |-
+        eval "$SHELL_SETUP"
         diff --minimal \
           <(jq --null-input --arg col c --arg uni 'a«,»c' '{ "colon:in:Key": $col, "unicode_escapes": $uni }'"| $sortObjectJqExpr") \
           <(jq "$sortObjectJqExpr" <tmp/multi.json)
