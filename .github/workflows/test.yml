@@ -12,8 +12,8 @@ env:
         printf 'assertion error: "%s" != "%s"\n' "$1" "$2" >&2
         return 1
       fi
-    }
-    sortObjectJqExpr='to_entries | sort_by(.key) []'
+    };
+    sortObjectJqExpr='to_entries | sort_by(.key) []';
 
 jobs:
   test:
