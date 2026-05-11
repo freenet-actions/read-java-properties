@@ -13,7 +13,6 @@ env:
         return 1
       fi
     }
-    sortObjectJqExpr='to_entries | sort_by(.key) []'
 
 jobs:
   test:
@@ -82,24 +81,29 @@ jobs:
       run: |-
         eval "$SHELL_SETUP"
         jq <<<"$RESULT" # assert parseable (and print)
+        # check some values:
         assertEquals "$(jq --raw-output '.unicode_escapes'  <<<"$RESULT")" 'a«,»c'
-        assertEquals "$(jq --raw-output '.["colon:in:Key"]' <<<"$RESULT")" c
+        assertEquals "$(jq --raw-output '.["colon:in:Key"]' <<<"$RESULT")" 'c'
+        # assert size >= 10:
+        test "$(jq --raw-output 'keys | length' <<<"$RESULT")" -ge 10
 
     - name: 'test: query multiple properties as JSON action output'
       id: multiple-json
       uses: ./
       with:
         file: test/resources/test.properties
-        keys: 'colon:in:Key unicode_escapes'
+        keys: 'colon:in:Key colonInValue unicode_escapes'
         resultType: json
     - name: 'validate "test: query multiple properties as JSON action output"'
       env:
         RESULT: ${{steps.multiple-json.outputs.json}}
       run: |-
         eval "$SHELL_SETUP"
-        diff --minimal \
-          <(jq --null-input --arg col c --arg uni 'a«,»c' '{ "colon:in:Key": $col, "unicode_escapes": $uni }'"| $sortObjectJqExpr") \
-          <(jq "$sortObjectJqExpr" <<<"$RESULT")
+        assertEquals "$(jq --raw-output '.unicode_escapes'  <<<"$RESULT")" 'a«,»c'
+        assertEquals "$(jq --raw-output '.colonInValue'     <<<"$RESULT")" 'cv:'
+        assertEquals "$(jq --raw-output '.["colon:in:Key"]' <<<"$RESULT")" 'c'
+        # assert size 3 (i.e. no additional results):
+        assertEquals "$(jq --raw-output 'keys | length' <<<"$RESULT")" 3
 
     - name: 'test: query multiple properties as JSON file'
       uses: ./
@@ -110,9 +114,11 @@ jobs:
     - name: 'validate "test: query multiple properties as JSON file"'
       run: |-
         eval "$SHELL_SETUP"
-        diff --minimal \
-          <(jq --null-input --arg col c --arg uni 'a«,»c' '{ "colon:in:Key": $col, "unicode_escapes": $uni }'"| $sortObjectJqExpr") \
-          <(jq "$sortObjectJqExpr" <tmp/multi.json)
+        assertEquals "$(jq --raw-output '.unicode_escapes'  <tmp/multi.json)" 'a«,»c'
+        assertEquals "$(jq --raw-output '.colonInValue'     <tmp/multi.json)" 'cv:'
+        assertEquals "$(jq --raw-output '.["colon:in:Key"]' <tmp/multi.json)" 'c'
+        # assert size 2 (i.e. no additional results):
+        assertEquals "$(jq --raw-output 'keys | length' <tmp/multi.json)" 3
 
   # Each test which sets environment variables is a separate job to be independant of other tests.
   test-all-env:
