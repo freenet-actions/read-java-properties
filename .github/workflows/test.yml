@@ -17,7 +17,7 @@ env:
       if [ "$1" = "$2" ]; then
         printf 'ok: "%s" == "%s"\n' "$1" "$2" >&2
       else
-        printf 'assertion error: "%s" != "%s"\n' "$1" "$2" | tee >(od --width=1000 --address-radix=n --format=c >&2)
+        printf 'assertion error: "%s" != "%s"\n' "$1" "$2" >&2
         return 1
       fi
     }
@@ -26,15 +26,19 @@ env:
     assertUndefined() {
       local getterFunction=$1; shift
       local value st
+      set -x
       if value="$("$getterFunction" "$@")"; then
         printf 'assertion error: %s == "%s", expected undefined\n' "$*" "$value" >&2
+        set +x
         return 1
       elif [ ${st-$?} -eq "$NOT_FOUND_STATUS" ]; then
         printf 'ok: %s is undefined\n' "$*" >&2
       else
         # no error message, assuming failed $getterFunction has already written one
+        set +x
         return $st
       fi
+      set +x
     }
 
     # The following helper functions to get a value for a given property key from the result have a uniform
@@ -58,7 +62,7 @@ env:
       local key=$1; shift
       local encodedKey
       encodedKey="_$(perl -pe 's=((?!_)[[:punct:]])= sprintf("-%04X", ord($1)) =ge' <<<"$key")"
-      getEnvJsonValue "$encodedKey"
+      getEnvJsonValue "$encodedKey" "$@"
     }
 
     # Prints the value of the environment variable set for key $1 (when not using a prefix).
