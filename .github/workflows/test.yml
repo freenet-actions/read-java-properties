@@ -26,19 +26,15 @@ env:
     assertUndefined() {
       local getterFunction=$1; shift
       local value st
-      set -x
       if value="$("$getterFunction" "$@")"; then
         printf 'assertion error: %s == "%s", expected undefined\n' "$*" "$value" >&2
-        set +x
         return 1
       elif [ ${st-$?} -eq "$NOT_FOUND_STATUS" ]; then
         printf 'ok: %s is undefined\n' "$*" >&2
       else
         # no error message, assuming failed $getterFunction has already written one
-        set +x
         return $st
       fi
-      set +x
     }
 
     # The following helper functions to get a value for a given property key from the result have a uniform
@@ -49,7 +45,7 @@ env:
     # Expects JSON as stdin and extracts the value for key $1.
     getJsonValue() {
       local key=$1; shift
-      jq --arg k "$key" --raw-output '.[$k] // halt_error(env.NOT_FOUND_STATUS | tonumber)'
+      jq --arg k "$key" --raw-output '.[$k] // ("" | halt_error(env.NOT_FOUND_STATUS | tonumber))'
     }
 
     # Expects JSON in variable RESULT_JSON and extracts the value for key $1.
