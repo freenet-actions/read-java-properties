@@ -45,9 +45,7 @@ env:
     # Expects JSON as stdin and extracts the value for key $1.
     getJsonValue() {
       local key=$1; shift
-      local result
-      result=$(jq --arg k "$key" --raw-output '.[$k] // halt_error(env.NOT_FOUND_STATUS | tonumber)')
-      printf %s "$result" # without extra trailing linefeed
+      jq --arg k "$key" --raw-output '.[$k] // halt_error(env.NOT_FOUND_STATUS | tonumber)'
     }
 
     # Expects JSON in variable RESULT_JSON and extracts the value for key $1.
@@ -212,7 +210,9 @@ jobs:
         assertEquals "$($RESULT_GETTER dashInValue       )" 'd-'
         assertEquals "$($RESULT_GETTER empty             )" ''
         assertEquals "$($RESULT_GETTER null              )" 'null'
-        assertEquals "$($RESULT_GETTER whitespace_escapes && printf •)" $'a\tb\nc\n•' # add a trailing dummy char to preserve the otherwise trailing linefeed
+        # Expect additional linefeed (the usual output of commands, e.g. jq);
+        # add a trailing dummy char to preserve the otherwise trailing linefeed in bash command substitution [https://stackoverflow.com/a/15184414]:
+        assertEquals "$($RESULT_GETTER whitespace_escapes && printf '|')" $'A\tB\fC C\nD\n\n|'
         assertEquals "$($RESULT_GETTER unicode_escapes   )" 'a«,»c'
         assertEquals "$($RESULT_GETTER dash_1            )" '-'
         assertEquals "$($RESULT_GETTER dash_2            )" '--'
