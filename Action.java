@@ -191,7 +191,7 @@ enum GitHubOutputFile {
 	}
 
 	private static String encodeOutputValue(String value) {
-		StringBuilder result = new StringBuilder(value.length() + 4).append('_');
+		StringBuilder result = new StringBuilder(value.length() + 4);
 		Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(value);
 		while (matcher.find()) {
 			matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
