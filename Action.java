@@ -80,7 +80,7 @@ enum ResultWriter {
 		public void write(Properties props, Input input) throws IOException {
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
 				for (Map.Entry<String, String> entry : Util.stringEntries(props)) {
-					writer.write(input.outputPrefix() + entry.getKey(), entry.getValue());
+					writer.write(entry.getKey(), entry.getValue());
 				}
 
 				if (props.size() == 1) {
@@ -181,9 +181,9 @@ enum GitHubOutputFile {
 		this(fileNameEnvVar, v -> v);
 	}
 
-	private GitHubOutputFile(String fileNameEnvVar, Function<String, String> valueReplacer) {
+	private GitHubOutputFile(String fileNameEnvVar, Function<String, String> keyReplacer) {
 		this.fileName = Util.getRequiredEnv(fileNameEnvVar);
-		this.keyReplacer = valueReplacer;
+		this.keyReplacer = keyReplacer;
 	}
 
 	public GitHubVariableWriter open() throws IOException {
@@ -191,7 +191,8 @@ enum GitHubOutputFile {
 	}
 
 	private static String encodeOutputValue(String value) {
-		StringBuilder result = new StringBuilder(value.length() + 4);
+		StringBuilder result = new StringBuilder(value.length() + input.outputPrefix() + 4);
+		result.append(input.outputPrefix());
 		Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(value);
 		while (matcher.find()) {
 			matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
@@ -209,10 +210,10 @@ class GitHubVariableWriter implements AutoCloseable {
 	private final Function<String, String> keyReplacer;
 	private final Writer writer;
 
-	public GitHubVariableWriter(String description, String fileName, Function<String, String> valueReplacer) throws IOException {
+	public GitHubVariableWriter(String description, String fileName, Function<String, String> keyReplacer) throws IOException {
 		this.description = description;
 		this.writer = Util.openFile(fileName, StandardOpenOption.APPEND);
-		this.keyReplacer = Objects.requireNonNull(valueReplacer);
+		this.keyReplacer = Objects.requireNonNull(keyReplacer);
 	}
 
 	public void write(String key, String value) throws IOException {
