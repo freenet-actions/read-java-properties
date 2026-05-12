@@ -45,7 +45,9 @@ env:
     # Expects JSON as stdin and extracts the value for key $1.
     getJsonValue() {
       local key=$1; shift
-      jq --arg k "$key" --raw-output '.[$k] // halt_error(env.NOT_FOUND_STATUS | tonumber)'
+      local result
+      result=$(jq --arg k "$key" --raw-output '.[$k] // halt_error(env.NOT_FOUND_STATUS | tonumber)')
+      printf %s "$result" # without extra trailing linefeed
     }
 
     # Expects JSON in variable RESULT_JSON and extracts the value for key $1.
