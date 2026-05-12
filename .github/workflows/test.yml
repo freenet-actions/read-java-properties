@@ -212,7 +212,7 @@ jobs:
         assertEquals "$($RESULT_GETTER dashInValue       )" 'd-'
         assertEquals "$($RESULT_GETTER empty             )" ''
         assertEquals "$($RESULT_GETTER null              )" 'null'
-        assertEquals "$($RESULT_GETTER whitespace_escapes && printf •)" $'a\fb\nc\n•' # add a trailing dummy char to preserve the otherwise trailing linefeed
+        assertEquals "$($RESULT_GETTER whitespace_escapes && printf •)" $'a\tb\nc\n•' # add a trailing dummy char to preserve the otherwise trailing linefeed
         assertEquals "$($RESULT_GETTER unicode_escapes   )" 'a«,»c'
         assertEquals "$($RESULT_GETTER dash_1            )" '-'
         assertEquals "$($RESULT_GETTER dash_2            )" '--'
