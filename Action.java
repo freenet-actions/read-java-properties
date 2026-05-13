@@ -76,21 +76,24 @@ enum ResultWriter {
 	OUTPUT("output") {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
-			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open(config)) {
+			String lastValue = null;
+			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
 				for (Map.Entry<String, String> entry : Util.stringEntries(props)) {
-					writer.write(encodeKey(config, entry.getKey()), entry.getValue());
+					String key = encodeKey(config, config.outputPrefix() + entry.getKey());
+					lastValue = entry.getValue();
+					writer.write(key, lastValue);
 				}
 
-				if (props.size() == 1) {
-					String value = Util.stringEntries(props).iterator().next().getValue();
-					writer.write("value", value);
+				// TODO props must be in order of config.selectedKeys()
+				// Otherwise, this is arbitrary:
+				if (lastValue != null) {
+					writer.write("value", lastValue);
 				}
 			}
 		}
 
 		private static String encodeKey(Config config, String key) {
 			StringBuilder result = new StringBuilder(key.length() + config.outputPrefix().length() + 4);
-			result.append(config.outputPrefix());
 			Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(key);
 			while (matcher.find()) {
 				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
@@ -115,7 +118,7 @@ enum ResultWriter {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
 			String prefix = config.resultTypeArg();
-			try (GitHubVariableWriter writer = GitHubOutputFile.ENV.open(config)) {
+			try (GitHubVariableWriter writer = GitHubOutputFile.ENV.open()) {
 				for (Map.Entry<String, String> entry : Util.stringEntries(props)) {
 					writer.write(prefix + entry.getKey(), entry.getValue());
 				}
@@ -126,7 +129,7 @@ enum ResultWriter {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
 			config.requireNoArg();
-			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open(config)) {
+			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
 				writer.write("json", Util.toJson(props));
 			}
 		}
@@ -168,11 +171,11 @@ enum ResultWriter {
 			throw new IllegalArgumentException("resultType " + config.resultTypeWithArg() + " has " + resultNames.length
 			        + " arguments, but " + selectedKeys.length + " keys are selected");
 		}
-		try (GitHubVariableWriter writer = gitHubOutputFile.open(config)) {
+		try (GitHubVariableWriter writer = gitHubOutputFile.open()) {
 			for (int i = 0; i < selectedKeys.length; i++) {
-				String varName = resultNames[resultNames.length == 1 ? 0 : i];
+				String name = resultNames[resultNames.length == 1 ? 0 : i];
 				String value = props.getProperty(selectedKeys[i]);
-				writer.write(varName, value);
+				writer.write(name, value);
 			}
 		}
 	}
@@ -180,18 +183,8 @@ enum ResultWriter {
 
 
 enum GitHubOutputFile {
-	OUTPUT("GITHUB_OUTPUT") {
-		@Override
-		public GitHubVariableWriter open(Config config) throws IOException {
-			return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName);
-		}
-	},
-	ENV("GITHUB_ENV") {
-		@Override
-		public GitHubVariableWriter open(Config config) throws IOException {
-			return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName);
-		}
-	};
+	OUTPUT("GITHUB_OUTPUT"), //
+	ENV("GITHUB_ENV");
 
 	final String fileName;
 
@@ -199,7 +192,9 @@ enum GitHubOutputFile {
 		this.fileName = Util.getRequiredEnv(fileNameEnvVar);
 	}
 
-	public abstract GitHubVariableWriter open(Config config) throws IOException;
+	public GitHubVariableWriter open() throws IOException {
+		return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName);
+	}
 }
 
 
