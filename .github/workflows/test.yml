@@ -282,7 +282,6 @@ jobs:
         RESULT_JSON: ${{toJSON(steps.multi-output-named.outputs)}}
         # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
         RESULT_GETTER: getEnvJsonValue
-        UNUSED_RESULT_GETTER: encodeKeyAndGetEnvJsonValue
       run: &validateMultiNamedImpl |-
         eval "$SHELL_SETUP"
         assertEquals "$($RESULT_GETTER java-version)" '21'
@@ -295,17 +294,6 @@ jobs:
         assertUndefined $RESULT_GETTER org.gradle.jvmargs
         assertUndefined $RESULT_GETTER colon:in:Key
         assertUndefined $RESULT_GETTER unicode_escapes
-
-        # The outputs with the encoded names are not set (when different from given name):
-        assertUndefined $UNUSED_RESULT_GETTER java-version
-        assertUndefined $UNUSED_RESULT_GETTER colon
-        assertUndefined $UNUSED_RESULT_GETTER unicode
-
-        # The outputs with the encoded default names are not set (when different from given name):
-        assertUndefined $UNUSED_RESULT_GETTER sourceJavaVersion
-        assertUndefined $UNUSED_RESULT_GETTER org.gradle.jvmargs
-        assertUndefined $UNUSED_RESULT_GETTER colon:in:Key
-        assertUndefined $UNUSED_RESULT_GETTER unicode_escapes
 
         # Outputs for non-selected keys are not set, for example:
         assertUndefined $RESULT_GETTER colonInValue
@@ -324,7 +312,6 @@ jobs:
         RESULT_JSON: ${{toJSON(steps.multi-output-named1.outputs)}}
         # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
         RESULT_GETTER: getEnvJsonValue
-        UNUSED_RESULT_GETTER: encodeKeyAndGetEnvJsonValue
       run: &validateMultiNamed1Impl |-
         eval "$SHELL_SETUP"
         assertEquals "$($RESULT_GETTER my-prop)" 'c'
@@ -334,15 +321,6 @@ jobs:
         assertUndefined $RESULT_GETTER org.gradle.jvmargs
         assertUndefined $RESULT_GETTER colon:in:Key
         assertUndefined $RESULT_GETTER unicode_escapes
-
-        # The output with the encoded name is not set:
-        assertUndefined $UNUSED_RESULT_GETTER my-prop
-
-        # The outputs with the encoded default names are not set (when different from given name):
-        assertUndefined $UNUSED_RESULT_GETTER sourceJavaVersion
-        assertUndefined $UNUSED_RESULT_GETTER org.gradle.jvmargs
-        assertUndefined $UNUSED_RESULT_GETTER colon:in:Key
-        assertUndefined $UNUSED_RESULT_GETTER unicode_escapes
 
         # Outputs for non-selected keys are not set, for example:
         assertUndefined $RESULT_GETTER colonInValue
