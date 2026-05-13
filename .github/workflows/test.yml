@@ -18,6 +18,17 @@ env:
       printf "::debug::${pattern}" "$@" >&2
     }
 
+    # Reads stdin and replaces one linefeed at the end of the input with "¶". Exits with non-zero status if that LF is
+    # missing.
+    # Piping a command to this function works around the removal of trailing LFs in command substitution
+    # [https://stackoverflow.com/a/15184414] and preserves meaningful LFs.
+    # For example, when the command is `jq --raw-output …` and the result is a string with ends with LF, that LF is
+    # preserved, and the LF added by jq (like line-based commands generally do) is replaced.
+    # This enables precise comparisons.
+    replaceLastLF() {
+      perl -e '$/ = undef; $_ = <>; ($r = $_) =~ s{\n$}{}; die "missing trailing LF\n" if $r eq $_; printf "%s¶", $r'
+    }
+
     assertEquals() {
       debugPrintf 'assertEquals("%s", "%s")\n' "$1" "$2"
       if [ "$1" = "$2" ]; then
@@ -29,7 +40,22 @@ env:
     }
 
     # Queries a value by calling command $1 with the remaining args and expects it to exit with status $NOT_FOUND_STATUS.
-    assertUndefined() {
+    getAndAssertEquals() {
+      local getterFunction=$1; shift
+      local key=$1; shift
+      local expectedValue=$1; shift
+      local value st
+      # Invocation of $getterFunction must not ignore its return status. This is why tests use this function in the form
+      #   getAndAssertEquals $RESULT_GETTER "$key" "$expectedValue"
+      # instead of
+      #   assertEquals "$($RESULT_GETTER "$key")" "$expectedValue"
+      value="$(set -o pipefail; "$getterFunction" "$key" | replaceLastLF)"
+      expectedValue="$(printf '%s\n' "$expectedValue" | replaceLastLF)"
+      assertEquals "$value" "$expectedValue"
+    }
+
+    # Queries a value by calling command $1 with the remaining args and expects it to exit with status $NOT_FOUND_STATUS.
+    getAndAssertUndefined() {
       local getterFunction=$1; shift
       local value st
       if value="$("$getterFunction" "$@")"; then
@@ -210,33 +236,31 @@ jobs:
         RESULT_GETTER: encodeKeyAndGetEnvJsonValue
       run: &validateAllImpl |-
         eval "$SHELL_SETUP"
-        assertEquals "$($RESULT_GETTER sourceJavaVersion )" '21'
-        assertEquals "$($RESULT_GETTER targetJavaVersion )" '17'
-        assertEquals "$($RESULT_GETTER org.gradle.jvmargs)" '-ea -showversion'
-        assertEquals "$($RESULT_GETTER colon:in:Key      )" 'c'
-        assertEquals "$($RESULT_GETTER colonInValue      )" 'cv:'
-        assertEquals "$($RESULT_GETTER dash-in-Key       )" 'd'
-        assertEquals "$($RESULT_GETTER dashInValue       )" 'd-'
-        assertEquals "$($RESULT_GETTER empty             )" ''
-        assertEquals "$($RESULT_GETTER null              )" 'null'
-        # Expect additional linefeed (the usual output of commands, e.g. jq);
-        # add a trailing dummy char to preserve the otherwise trailing linefeed in bash command substitution [https://stackoverflow.com/a/15184414]:
-        assertEquals "$($RESULT_GETTER whitespace_escapes && printf '|')" $'A\tB\fC C\nD\n\n|'
-        assertEquals "$($RESULT_GETTER unicode_escapes   )" 'a«,»c'
-        assertEquals "$($RESULT_GETTER dash_1            )" '-'
-        assertEquals "$($RESULT_GETTER dash_2            )" '--'
-        assertEquals "$($RESULT_GETTER dash_3            )" '---'
-        assertEquals "$($RESULT_GETTER dash_4            )" '----'
-        assertEquals "$($RESULT_GETTER dash_5            )" '-----'
-        assertEquals "$($RESULT_GETTER dash_6            )" '------'
-        assertEquals "$($RESULT_GETTER dash_7            )" '-------'
-        assertEquals "$($RESULT_GETTER dash_8            )" '--------'
-        assertEquals "$($RESULT_GETTER dash_9            )" '---------'
-        assertEquals "$($RESULT_GETTER dash_10           )" '----------'
-        assertEquals "$($RESULT_GETTER dash_11           )" '-----------'
-        assertEquals "$($RESULT_GETTER dash_12           )" '------------'
-        assertEquals "$($RESULT_GETTER dash_3_4_1        )" $'---\n----\n-'
-        assertEquals "$($RESULT_GETTER dash_3_4_8_1      )" $'---\n----\n--------\n-'
+        getAndAssertEquals "$RESULT_GETTER" sourceJavaVersion  '21'
+        getAndAssertEquals "$RESULT_GETTER" targetJavaVersion  '17'
+        getAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
+        getAndAssertEquals "$RESULT_GETTER" colon:in:Key       'c'
+        getAndAssertEquals "$RESULT_GETTER" colonInValue       'cv:'
+        getAndAssertEquals "$RESULT_GETTER" dash-in-Key        'd'
+        getAndAssertEquals "$RESULT_GETTER" dashInValue        'd-'
+        getAndAssertEquals "$RESULT_GETTER" empty              ''
+        getAndAssertEquals "$RESULT_GETTER" null               'null'
+        getAndAssertEquals "$RESULT_GETTER" whitespace_escapes $'A\tB\fC C\nD\n\n'
+        getAndAssertEquals "$RESULT_GETTER" unicode_escapes    'a«,»c'
+        getAndAssertEquals "$RESULT_GETTER" dash_1             '-'
+        getAndAssertEquals "$RESULT_GETTER" dash_2             '--'
+        getAndAssertEquals "$RESULT_GETTER" dash_3             '---'
+        getAndAssertEquals "$RESULT_GETTER" dash_4             '----'
+        getAndAssertEquals "$RESULT_GETTER" dash_5             '-----'
+        getAndAssertEquals "$RESULT_GETTER" dash_6             '------'
+        getAndAssertEquals "$RESULT_GETTER" dash_7             '-------'
+        getAndAssertEquals "$RESULT_GETTER" dash_8             '--------'
+        getAndAssertEquals "$RESULT_GETTER" dash_9             '---------'
+        getAndAssertEquals "$RESULT_GETTER" dash_10            '----------'
+        getAndAssertEquals "$RESULT_GETTER" dash_11            '-----------'
+        getAndAssertEquals "$RESULT_GETTER" dash_12            '------------'
+        getAndAssertEquals "$RESULT_GETTER" dash_3_4_1         $'---\n----\n-'
+        getAndAssertEquals "$RESULT_GETTER" dash_3_4_8_1       $'---\n----\n--------\n-'
 
     ############################################################
     - name: 'test: query multiple properties as action outputs'
@@ -251,32 +275,32 @@ jobs:
         RESULT_GETTER: encodeKeyAndGetEnvJsonValue
       run: &validateMultiImpl |-
         eval "$SHELL_SETUP"
-        assertEquals "$($RESULT_GETTER sourceJavaVersion )" '21'
-        assertEquals "$($RESULT_GETTER org.gradle.jvmargs)" '-ea -showversion'
-        assertEquals "$($RESULT_GETTER colon:in:Key      )" 'c'
-        assertEquals "$($RESULT_GETTER unicode_escapes   )" 'a«,»c'
+        getAndAssertEquals "$RESULT_GETTER" sourceJavaVersion  '21'
+        getAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
+        getAndAssertEquals "$RESULT_GETTER" colon:in:Key       'c'
+        getAndAssertEquals "$RESULT_GETTER" unicode_escapes    'a«,»c'
 
-        assertUndefined $RESULT_GETTER targetJavaVersion
-        assertUndefined $RESULT_GETTER colonInValue
-        assertUndefined $RESULT_GETTER dash-in-Key
-        assertUndefined $RESULT_GETTER dashInValue
-        assertUndefined $RESULT_GETTER empty
-        assertUndefined $RESULT_GETTER null
-        assertUndefined $RESULT_GETTER whitespace_escapes
-        assertUndefined $RESULT_GETTER dash_1
-        assertUndefined $RESULT_GETTER dash_2
-        assertUndefined $RESULT_GETTER dash_3
-        assertUndefined $RESULT_GETTER dash_4
-        assertUndefined $RESULT_GETTER dash_5
-        assertUndefined $RESULT_GETTER dash_6
-        assertUndefined $RESULT_GETTER dash_7
-        assertUndefined $RESULT_GETTER dash_8
-        assertUndefined $RESULT_GETTER dash_9
-        assertUndefined $RESULT_GETTER dash_10
-        assertUndefined $RESULT_GETTER dash_11
-        assertUndefined $RESULT_GETTER dash_12
-        assertUndefined $RESULT_GETTER dash_3_4_1
-        assertUndefined $RESULT_GETTER dash_3_4_8_1
+        getAndAssertUndefined $RESULT_GETTER targetJavaVersion
+        getAndAssertUndefined $RESULT_GETTER colonInValue
+        getAndAssertUndefined $RESULT_GETTER dash-in-Key
+        getAndAssertUndefined $RESULT_GETTER dashInValue
+        getAndAssertUndefined $RESULT_GETTER empty
+        getAndAssertUndefined $RESULT_GETTER null
+        getAndAssertUndefined $RESULT_GETTER whitespace_escapes
+        getAndAssertUndefined $RESULT_GETTER dash_1
+        getAndAssertUndefined $RESULT_GETTER dash_2
+        getAndAssertUndefined $RESULT_GETTER dash_3
+        getAndAssertUndefined $RESULT_GETTER dash_4
+        getAndAssertUndefined $RESULT_GETTER dash_5
+        getAndAssertUndefined $RESULT_GETTER dash_6
+        getAndAssertUndefined $RESULT_GETTER dash_7
+        getAndAssertUndefined $RESULT_GETTER dash_8
+        getAndAssertUndefined $RESULT_GETTER dash_9
+        getAndAssertUndefined $RESULT_GETTER dash_10
+        getAndAssertUndefined $RESULT_GETTER dash_11
+        getAndAssertUndefined $RESULT_GETTER dash_12
+        getAndAssertUndefined $RESULT_GETTER dash_3_4_1
+        getAndAssertUndefined $RESULT_GETTER dash_3_4_8_1
 
     ############################################################
     - name: 'test: query multiple properties as action outputs of given names'
@@ -293,20 +317,20 @@ jobs:
         RESULT_GETTER: getEnvJsonValue
       run: &validateMultiNamedImpl |-
         eval "$SHELL_SETUP"
-        assertEquals "$($RESULT_GETTER java-version)" '21'
-        assertEquals "$($RESULT_GETTER jvm_args    )" '-ea -showversion'
-        assertEquals "$($RESULT_GETTER colon       )" 'c'
-        assertEquals "$($RESULT_GETTER unicode     )" 'a«,»c'
+        getAndAssertEquals "$RESULT_GETTER" java-version '21'
+        getAndAssertEquals "$RESULT_GETTER" jvm_args     '-ea -showversion'
+        getAndAssertEquals "$RESULT_GETTER" colon        'c'
+        getAndAssertEquals "$RESULT_GETTER" unicode      'a«,»c'
 
         # The outputs with the default names are not set:
-        assertUndefined $RESULT_GETTER sourceJavaVersion
-        assertUndefined $RESULT_GETTER org.gradle.jvmargs
-        assertUndefined $RESULT_GETTER colon:in:Key
-        assertUndefined $RESULT_GETTER unicode_escapes
+        getAndAssertUndefined $RESULT_GETTER sourceJavaVersion
+        getAndAssertUndefined $RESULT_GETTER org.gradle.jvmargs
+        getAndAssertUndefined $RESULT_GETTER colon:in:Key
+        getAndAssertUndefined $RESULT_GETTER unicode_escapes
 
         # Outputs for non-selected keys are not set, for example:
-        assertUndefined $RESULT_GETTER colonInValue
-        assertUndefined $RESULT_GETTER dash_1
+        getAndAssertUndefined $RESULT_GETTER colonInValue
+        getAndAssertUndefined $RESULT_GETTER dash_1
 
     ############################################################
     - name: 'test: query multiple properties as action outputs of given name'
@@ -323,17 +347,17 @@ jobs:
         RESULT_GETTER: getEnvJsonValue
       run: &validateMultiNamed1Impl |-
         eval "$SHELL_SETUP"
-        assertEquals "$($RESULT_GETTER my-prop)" 'c'
+        getAndAssertEquals "$RESULT_GETTER" my-prop 'c'
 
         # The outputs with the default names are not set:
-        assertUndefined $RESULT_GETTER sourceJavaVersion
-        assertUndefined $RESULT_GETTER org.gradle.jvmargs
-        assertUndefined $RESULT_GETTER colon:in:Key
-        assertUndefined $RESULT_GETTER unicode_escapes
+        getAndAssertUndefined $RESULT_GETTER sourceJavaVersion
+        getAndAssertUndefined $RESULT_GETTER org.gradle.jvmargs
+        getAndAssertUndefined $RESULT_GETTER colon:in:Key
+        getAndAssertUndefined $RESULT_GETTER unicode_escapes
 
         # Outputs for non-selected keys are not set, for example:
-        assertUndefined $RESULT_GETTER colonInValue
-        assertUndefined $RESULT_GETTER dash_1
+        getAndAssertUndefined $RESULT_GETTER colonInValue
+        getAndAssertUndefined $RESULT_GETTER dash_1
 
     ############################################################
     - name: 'test: query single property as action outputs'
@@ -348,32 +372,32 @@ jobs:
         RESULT_GETTER: encodeKeyAndGetEnvJsonValue
       run: &validateSingleImpl |-
         eval "$SHELL_SETUP"
-        assertEquals "$($RESULT_GETTER org.gradle.jvmargs)" '-ea -showversion'
+        getAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
 
-        assertUndefined $RESULT_GETTER sourceJavaVersion
-        assertUndefined $RESULT_GETTER targetJavaVersion
-        assertUndefined $RESULT_GETTER colon:in:Key
-        assertUndefined $RESULT_GETTER colonInValue
-        assertUndefined $RESULT_GETTER dash-in-Key
-        assertUndefined $RESULT_GETTER dashInValue
-        assertUndefined $RESULT_GETTER empty
-        assertUndefined $RESULT_GETTER null
-        assertUndefined $RESULT_GETTER whitespace_escapes
-        assertUndefined $RESULT_GETTER unicode_escapes
-        assertUndefined $RESULT_GETTER dash_1
-        assertUndefined $RESULT_GETTER dash_2
-        assertUndefined $RESULT_GETTER dash_3
-        assertUndefined $RESULT_GETTER dash_4
-        assertUndefined $RESULT_GETTER dash_5
-        assertUndefined $RESULT_GETTER dash_6
-        assertUndefined $RESULT_GETTER dash_7
-        assertUndefined $RESULT_GETTER dash_8
-        assertUndefined $RESULT_GETTER dash_9
-        assertUndefined $RESULT_GETTER dash_10
-        assertUndefined $RESULT_GETTER dash_11
-        assertUndefined $RESULT_GETTER dash_12
-        assertUndefined $RESULT_GETTER dash_3_4_1
-        assertUndefined $RESULT_GETTER dash_3_4_8_1
+        getAndAssertUndefined $RESULT_GETTER sourceJavaVersion
+        getAndAssertUndefined $RESULT_GETTER targetJavaVersion
+        getAndAssertUndefined $RESULT_GETTER colon:in:Key
+        getAndAssertUndefined $RESULT_GETTER colonInValue
+        getAndAssertUndefined $RESULT_GETTER dash-in-Key
+        getAndAssertUndefined $RESULT_GETTER dashInValue
+        getAndAssertUndefined $RESULT_GETTER empty
+        getAndAssertUndefined $RESULT_GETTER null
+        getAndAssertUndefined $RESULT_GETTER whitespace_escapes
+        getAndAssertUndefined $RESULT_GETTER unicode_escapes
+        getAndAssertUndefined $RESULT_GETTER dash_1
+        getAndAssertUndefined $RESULT_GETTER dash_2
+        getAndAssertUndefined $RESULT_GETTER dash_3
+        getAndAssertUndefined $RESULT_GETTER dash_4
+        getAndAssertUndefined $RESULT_GETTER dash_5
+        getAndAssertUndefined $RESULT_GETTER dash_6
+        getAndAssertUndefined $RESULT_GETTER dash_7
+        getAndAssertUndefined $RESULT_GETTER dash_8
+        getAndAssertUndefined $RESULT_GETTER dash_9
+        getAndAssertUndefined $RESULT_GETTER dash_10
+        getAndAssertUndefined $RESULT_GETTER dash_11
+        getAndAssertUndefined $RESULT_GETTER dash_12
+        getAndAssertUndefined $RESULT_GETTER dash_3_4_1
+        getAndAssertUndefined $RESULT_GETTER dash_3_4_8_1
 
     ############################################################
     - name: 'test: query all properties as JSON action output'
