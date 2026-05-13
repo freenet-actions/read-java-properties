@@ -514,7 +514,7 @@ jobs:
       uses: ./
       with:
         file: test/resources/test.properties
-        resultType: env
+        resultType: 'env:${{env.ENV_VAR_PREFIX}}'
     - name: 'validate "test: query all properties as environment variables"'
       env:
         RESULT_GETTER: getEnvWithPrefix
@@ -530,7 +530,7 @@ jobs:
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
-        resultType: env
+        resultType: 'env:${{env.ENV_VAR_PREFIX}}'
     - name: 'validate "test: query multiple properties as environment variables with prefix"'
       env:
         RESULT_GETTER: getEnvWithPrefix
@@ -546,7 +546,7 @@ jobs:
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_SINGLE_KEY}}'
-        resultType: env
+        resultType: 'env:${{env.ENV_VAR_PREFIX}}'
     - name: 'validate "test: query single property as environment variable with prefix"'
       env:
         RESULT_GETTER: getEnvWithPrefix
