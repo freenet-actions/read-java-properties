@@ -24,20 +24,20 @@ import java.util.regex.Pattern;
 
 public class Action {
 	static void main(String[] args) throws Exception {
-		Input input = Input.fromEnv();
-		ResultWriter resultWriter = ResultWriter.of(input.resultType());
+		Config config = Config.fromEnv();
+		ResultWriter resultWriter = ResultWriter.of(config.resultType());
 		for (String file : args) {
-			Properties properties = input.selectedKeys() == null ? Util.readProperties(file)
-			        : Util.selectProperties(Util.readProperties(file), input.selectedKeys(), file);
-			resultWriter.write(properties, input);
+			Properties properties = config.selectedKeys() == null ? Util.readProperties(file)
+			        : Util.selectProperties(Util.readProperties(file), config.selectedKeys(), file);
+			resultWriter.write(properties, config);
 		}
 	}
 }
 
 
-record Input(String[] selectedKeys, String keySeparator, String resultTypeWithArg, String resultType, String resultTypeArg,
+record Config(String[] selectedKeys, String keySeparator, String resultTypeWithArg, String resultType, String resultTypeArg,
         String resultNameSeparator, String outputPrefix) {
-	public static Input fromEnv() {
+	public static Config fromEnv() {
 		// In order to keep the defaults DRY (in action.yml), the environment variables are all mandatory.
 		String keySeparator = Util.getRequiredEnv("KEY_SEPARATOR");
 		// System.getenv("KEYS") == null if set to empty string?! So this cannot be checked to be set if we want to allow empty
@@ -55,7 +55,7 @@ record Input(String[] selectedKeys, String keySeparator, String resultTypeWithAr
 		String resultType = matcher.group(1);
 		String resultTypeArg = Optional.ofNullable(matcher.group(2)).orElse("");
 		String outputPrefix = Util.getRequiredEnv("OUTPUT_PREFIX");
-		return new Input(keys, keySeparator, resultTypeWithArg, resultType, resultTypeArg, resultNameSeparator, outputPrefix);
+		return new Config(keys, keySeparator, resultTypeWithArg, resultType, resultTypeArg, resultNameSeparator, outputPrefix);
 	}
 
 	public String requiredResultTypeArg() {
@@ -77,10 +77,10 @@ record Input(String[] selectedKeys, String keySeparator, String resultTypeWithAr
 enum ResultWriter {
 	OUTPUT("output") {
 		@Override
-		public void write(Properties props, Input input) throws IOException {
-			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
+		public void write(Properties props, Config config) throws IOException {
+			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open(config)) {
 				for (Map.Entry<String, String> entry : Util.stringEntries(props)) {
-					writer.write(input.outputPrefix() + entry.getKey(), entry.getValue());
+					writer.write(entry.getKey(), entry.getValue());
 				}
 
 				if (props.size() == 1) {
@@ -92,21 +92,21 @@ enum ResultWriter {
 	},
 	OUTPUT_NAMED("output-named") {
 		@Override
-		public void write(Properties props, Input input) throws IOException {
-			writeNamedImpl(props, input, GitHubOutputFile.OUTPUT);
+		public void write(Properties props, Config config) throws IOException {
+			writeNamedImpl(props, config, GitHubOutputFile.OUTPUT);
 		}
 	},
 	ENV_NAMED("env-named") {
 		@Override
-		public void write(Properties props, Input input) throws IOException {
-			writeNamedImpl(props, input, GitHubOutputFile.ENV);
+		public void write(Properties props, Config config) throws IOException {
+			writeNamedImpl(props, config, GitHubOutputFile.ENV);
 		}
 	},
 	ENV("env") {
 		@Override
-		public void write(Properties props, Input input) throws IOException {
-			String prefix = input.resultTypeArg();
-			try (GitHubVariableWriter writer = GitHubOutputFile.ENV.open()) {
+		public void write(Properties props, Config config) throws IOException {
+			String prefix = config.resultTypeArg();
+			try (GitHubVariableWriter writer = GitHubOutputFile.ENV.open(config)) {
 				for (Map.Entry<String, String> entry : Util.stringEntries(props)) {
 					writer.write(prefix + entry.getKey(), entry.getValue());
 				}
@@ -115,17 +115,17 @@ enum ResultWriter {
 	},
 	JSON("json") {
 		@Override
-		public void write(Properties props, Input input) throws IOException {
-			input.requireNoArg();
-			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
+		public void write(Properties props, Config config) throws IOException {
+			config.requireNoArg();
+			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open(config)) {
 				writer.write("json", Util.toJson(props));
 			}
 		}
 	},
 	JSON_FILE("json-file") {
 		@Override
-		public void write(Properties props, Input input) throws IOException {
-			String outputFile = input.requiredResultTypeArg();
+		public void write(Properties props, Config config) throws IOException {
+			String outputFile = config.requiredResultTypeArg();
 			Files.createDirectories((Paths.get(outputFile).getParent()));
 			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE)) {
 				writer.write(Util.toJson(props));
@@ -141,25 +141,25 @@ enum ResultWriter {
 		this.inputName = inputName;
 	}
 
-	public static ResultWriter of(String name) {
+	public static ResultWriter of(String inputName) {
 		for (ResultWriter rw : ResultWriter.values()) {
-			if (rw.inputName.equals(name)) {
+			if (rw.inputName.equals(inputName)) {
 				return rw;
 			}
 		}
-		throw new IllegalArgumentException("invalid resultType: " + name);
+		throw new IllegalArgumentException("invalid result type: " + inputName);
 	}
 
-	public abstract void write(Properties props, Input input) throws IOException;
+	public abstract void write(Properties props, Config config) throws IOException;
 
-	private static void writeNamedImpl(Properties props, Input input, GitHubOutputFile gitHubOutputFile) throws IOException {
-		String[] selectedKeys = input.selectedKeys();
-		String[] resultNames = Util.splitArray(input.requiredResultTypeArg(), input.resultNameSeparator(), null);
+	private static void writeNamedImpl(Properties props, Config config, GitHubOutputFile gitHubOutputFile) throws IOException {
+		String[] selectedKeys = config.selectedKeys();
+		String[] resultNames = Util.splitArray(config.requiredResultTypeArg(), config.resultNameSeparator(), null);
 		if (resultNames.length != selectedKeys.length && resultNames.length != 1) {
-			throw new IllegalArgumentException("resultType " + input.resultTypeWithArg() + " has " + resultNames.length
+			throw new IllegalArgumentException("resultType " + config.resultTypeWithArg() + " has " + resultNames.length
 			        + " arguments, but " + selectedKeys.length + " keys are selected");
 		}
-		try (GitHubVariableWriter writer = gitHubOutputFile.open()) {
+		try (GitHubVariableWriter writer = gitHubOutputFile.open(config)) {
 			for (int i = 0; i < selectedKeys.length; i++) {
 				String varName = resultNames[resultNames.length == 1 ? 0 : i];
 				String value = props.getProperty(selectedKeys[i]);
@@ -171,34 +171,38 @@ enum ResultWriter {
 
 
 enum GitHubOutputFile {
-	OUTPUT("GITHUB_OUTPUT", v -> encodeOutputValue(v)), //
-	ENV("GITHUB_ENV");
+	OUTPUT("GITHUB_OUTPUT") {
+		@Override
+		public GitHubVariableWriter open(Config config) throws IOException {
+			return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName,
+			        k -> encodeKey(config, k));
+		}
 
-	private final String fileName;
-	private final Function<String, String> keyReplacer;
+		private static String encodeKey(Config config, String key) {
+			StringBuilder result = new StringBuilder(key.length() + config.outputPrefix().length() + 4);
+			result.append(config.outputPrefix());
+			Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(key);
+			while (matcher.find()) {
+				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
+			}
+			matcher.appendTail(result);
+			return result.toString();
+		}
+	},
+	ENV("GITHUB_ENV") {
+		@Override
+		public GitHubVariableWriter open(Config config) throws IOException {
+			return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName, k -> k);
+		}
+	};
+
+	final String fileName;
 
 	private GitHubOutputFile(String fileNameEnvVar) {
-		this(fileNameEnvVar, v -> v);
-	}
-
-	private GitHubOutputFile(String fileNameEnvVar, Function<String, String> valueReplacer) {
 		this.fileName = Util.getRequiredEnv(fileNameEnvVar);
-		this.keyReplacer = valueReplacer;
 	}
 
-	public GitHubVariableWriter open() throws IOException {
-		return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName, keyReplacer);
-	}
-
-	private static String encodeOutputValue(String value) {
-		StringBuilder result = new StringBuilder(value.length() + 4);
-		Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(value);
-		while (matcher.find()) {
-			matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
-		}
-		matcher.appendTail(result);
-		return result.toString();
-	}
+	public abstract GitHubVariableWriter open(Config config) throws IOException;
 }
 
 
@@ -209,10 +213,10 @@ class GitHubVariableWriter implements AutoCloseable {
 	private final Function<String, String> keyReplacer;
 	private final Writer writer;
 
-	public GitHubVariableWriter(String description, String fileName, Function<String, String> valueReplacer) throws IOException {
+	public GitHubVariableWriter(String description, String fileName, Function<String, String> keyReplacer) throws IOException {
 		this.description = description;
 		this.writer = Util.openFile(fileName, StandardOpenOption.APPEND);
-		this.keyReplacer = Objects.requireNonNull(valueReplacer);
+		this.keyReplacer = Objects.requireNonNull(keyReplacer);
 	}
 
 	public void write(String key, String value) throws IOException {
