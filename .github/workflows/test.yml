@@ -90,6 +90,7 @@ env:
     }
 
     getFileJsonValue() {
+      debugPrintf 'getFileJsonValue("%s") with file contents "%s"\n' "$*" "$(<"$JSON_OUTPUT_FILE")"
       getJsonValue "$@" <"$JSON_OUTPUT_FILE"
     }
 

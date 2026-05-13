@@ -140,7 +140,9 @@ enum ResultWriter {
 			String outputFile = config.requiredResultTypeArg();
 			Files.createDirectories((Paths.get(outputFile).getParent()));
 			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE)) {
-				writer.write(Util.toJson(props));
+				String jsonResult = Util.toJson(props);
+				System.err.format("writing to %s: %s\n", outputFile, jsonResult);
+				writer.write(jsonResult);
 				writer.write('\n');
 				writer.flush();
 			}
