@@ -179,7 +179,7 @@ enum GitHubOutputFile {
 		}
 
 		private static String encodeKey(Config config, String key) {
-			StringBuilder result = new StringBuilder(key.length() + config.outputPrefix() + 4);
+			StringBuilder result = new StringBuilder(key.length() + config.outputPrefix().length() + 4);
 			result.append(config.outputPrefix());
 			Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(key);
 			while (matcher.find()) {
