@@ -13,11 +13,9 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -78,16 +76,30 @@ enum ResultWriter {
 	OUTPUT("output") {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
-			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open(config)) {
+			String lastValue = null;
+			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
 				for (Map.Entry<String, String> entry : Util.stringEntries(props)) {
-					writer.write(entry.getKey(), entry.getValue());
+					String key = encodeKey(config, config.outputPrefix() + entry.getKey());
+					lastValue = entry.getValue();
+					writer.write(key, lastValue);
 				}
 
-				if (props.size() == 1) {
-					String value = Util.stringEntries(props).iterator().next().getValue();
-					writer.write("value", value);
+				// TODO props must be in order of config.selectedKeys()
+				// Otherwise, this is arbitrary:
+				if (lastValue != null) {
+					writer.write("value", lastValue);
 				}
 			}
+		}
+
+		private static String encodeKey(Config config, String key) {
+			StringBuilder result = new StringBuilder(key.length() + config.outputPrefix().length() + 4);
+			Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(key);
+			while (matcher.find()) {
+				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
+			}
+			matcher.appendTail(result);
+			return result.toString();
 		}
 	},
 	OUTPUT_NAMED("output-named") {
@@ -106,7 +118,7 @@ enum ResultWriter {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
 			String prefix = config.resultTypeArg();
-			try (GitHubVariableWriter writer = GitHubOutputFile.ENV.open(config)) {
+			try (GitHubVariableWriter writer = GitHubOutputFile.ENV.open()) {
 				for (Map.Entry<String, String> entry : Util.stringEntries(props)) {
 					writer.write(prefix + entry.getKey(), entry.getValue());
 				}
@@ -117,7 +129,7 @@ enum ResultWriter {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
 			config.requireNoArg();
-			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open(config)) {
+			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
 				writer.write("json", Util.toJson(props));
 			}
 		}
@@ -159,11 +171,11 @@ enum ResultWriter {
 			throw new IllegalArgumentException("resultType " + config.resultTypeWithArg() + " has " + resultNames.length
 			        + " arguments, but " + selectedKeys.length + " keys are selected");
 		}
-		try (GitHubVariableWriter writer = gitHubOutputFile.open(config)) {
+		try (GitHubVariableWriter writer = gitHubOutputFile.open()) {
 			for (int i = 0; i < selectedKeys.length; i++) {
-				String varName = resultNames[resultNames.length == 1 ? 0 : i];
+				String name = resultNames[resultNames.length == 1 ? 0 : i];
 				String value = props.getProperty(selectedKeys[i]);
-				writer.write(varName, value);
+				writer.write(name, value);
 			}
 		}
 	}
@@ -171,30 +183,8 @@ enum ResultWriter {
 
 
 enum GitHubOutputFile {
-	OUTPUT("GITHUB_OUTPUT") {
-		@Override
-		public GitHubVariableWriter open(Config config) throws IOException {
-			return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName,
-			        k -> encodeKey(config, k));
-		}
-
-		private static String encodeKey(Config config, String key) {
-			StringBuilder result = new StringBuilder(key.length() + config.outputPrefix().length() + 4);
-			result.append(config.outputPrefix());
-			Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(key);
-			while (matcher.find()) {
-				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
-			}
-			matcher.appendTail(result);
-			return result.toString();
-		}
-	},
-	ENV("GITHUB_ENV") {
-		@Override
-		public GitHubVariableWriter open(Config config) throws IOException {
-			return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName, k -> k);
-		}
-	};
+	OUTPUT("GITHUB_OUTPUT"), //
+	ENV("GITHUB_ENV");
 
 	final String fileName;
 
@@ -202,7 +192,9 @@ enum GitHubOutputFile {
 		this.fileName = Util.getRequiredEnv(fileNameEnvVar);
 	}
 
-	public abstract GitHubVariableWriter open(Config config) throws IOException;
+	public GitHubVariableWriter open() throws IOException {
+		return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName);
+	}
 }
 
 
@@ -210,22 +202,19 @@ class GitHubVariableWriter implements AutoCloseable {
 	private static final Pattern SIMPLE_VALUE = Pattern.compile("[\\w.-]+");
 
 	private final String description;
-	private final Function<String, String> keyReplacer;
 	private final Writer writer;
 
-	public GitHubVariableWriter(String description, String fileName, Function<String, String> keyReplacer) throws IOException {
+	public GitHubVariableWriter(String description, String fileName) throws IOException {
 		this.description = description;
 		this.writer = Util.openFile(fileName, StandardOpenOption.APPEND);
-		this.keyReplacer = Objects.requireNonNull(keyReplacer);
 	}
 
 	public void write(String key, String value) throws IOException {
-		String encodedKey = keyReplacer.apply(key);
-		System.err.format("%s %s\t:= \"%s\"\n", description, encodedKey, value);
+		System.err.format("%s %s\t:= \"%s\"\n", description, key, value);
 
 		// write (very) simple values in format "<key>=<value>":
 		if (SIMPLE_VALUE.matcher(value).matches()) {
-			this.writer.write(encodedKey);
+			this.writer.write(key);
 			this.writer.write('=');
 			this.writer.write(value);
 			this.writer.write('\n');
@@ -242,7 +231,7 @@ class GitHubVariableWriter implements AutoCloseable {
 
 		// write in multiline format
 		// [https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#multiline-strings]:
-		this.writer.write(encodedKey);
+		this.writer.write(key);
 		this.writer.write("<<");
 		this.writer.write(separator);
 		this.writer.write('\n');
