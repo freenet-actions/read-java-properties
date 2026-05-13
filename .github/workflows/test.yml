@@ -482,8 +482,8 @@ jobs:
       uses: ./
       with:
         file: test/resources/test.properties
-        keys: '${{env.SELECTED_SINGLE_KEY}}'
-        resultType: 'env-named:${{env.SELECTED_NAMES}}'
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'env-named:${{env.SELECTED_SINGLE_NAME}}'
     - name: 'validate "test: query multiple properties as environment variables of given names"'
       env:
         RESULT_GETTER: getEnv
