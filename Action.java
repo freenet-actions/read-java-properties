@@ -13,11 +13,9 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -80,7 +78,7 @@ enum ResultWriter {
 		public void write(Properties props, Config config) throws IOException {
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open(config)) {
 				for (Map.Entry<String, String> entry : Util.stringEntries(props)) {
-					writer.write(entry.getKey(), entry.getValue());
+					writer.write(encodeKey(config, entry.getKey()), entry.getValue());
 				}
 
 				if (props.size() == 1) {
@@ -88,6 +86,17 @@ enum ResultWriter {
 					writer.write("value", value);
 				}
 			}
+		}
+
+		private static String encodeKey(Config config, String key) {
+			StringBuilder result = new StringBuilder(key.length() + config.outputPrefix().length() + 4);
+			result.append(config.outputPrefix());
+			Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(key);
+			while (matcher.find()) {
+				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
+			}
+			matcher.appendTail(result);
+			return result.toString();
 		}
 	},
 	OUTPUT_NAMED("output-named") {
@@ -174,25 +183,13 @@ enum GitHubOutputFile {
 	OUTPUT("GITHUB_OUTPUT") {
 		@Override
 		public GitHubVariableWriter open(Config config) throws IOException {
-			return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName,
-			        k -> encodeKey(config, k));
-		}
-
-		private static String encodeKey(Config config, String key) {
-			StringBuilder result = new StringBuilder(key.length() + config.outputPrefix().length() + 4);
-			result.append(config.outputPrefix());
-			Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(key);
-			while (matcher.find()) {
-				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
-			}
-			matcher.appendTail(result);
-			return result.toString();
+			return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName);
 		}
 	},
 	ENV("GITHUB_ENV") {
 		@Override
 		public GitHubVariableWriter open(Config config) throws IOException {
-			return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName, k -> k);
+			return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName);
 		}
 	};
 
@@ -210,28 +207,34 @@ class GitHubVariableWriter implements AutoCloseable {
 	private static final Pattern SIMPLE_VALUE = Pattern.compile("[\\w.-]+");
 
 	private final String description;
-	private final Function<String, String> keyReplacer;
 	private final Writer writer;
 
-	public GitHubVariableWriter(String description, String fileName, Function<String, String> keyReplacer) throws IOException {
+	public GitHubVariableWriter(String description, String fileName) throws IOException {
 		this.description = description;
 		this.writer = Util.openFile(fileName, StandardOpenOption.APPEND);
-		this.keyReplacer = Objects.requireNonNull(keyReplacer);
 	}
 
 	public void write(String key, String value) throws IOException {
-		String encodedKey = keyReplacer.apply(key);
-		System.err.format("%s %s\t:= \"%s\"\n", description, encodedKey, value);
+		System.err.format("%s %s\t:= \"%s\"\n", description, key, value);
 
 		// write (very) simple values in format "<key>=<value>":
 		if (SIMPLE_VALUE.matcher(value).matches()) {
-			this.writer.write(encodedKey);
+			this.writer.write(key);
 			this.writer.write('=');
 			this.writer.write(value);
 			this.writer.write('\n');
 			return;
+		} else {
+			writeMultiLine(key, value);
 		}
+	}
 
+	/**
+	 * Writes a key-value pair in
+	 * <a href="https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#multiline-strings">multiline
+	 * format</a>.
+	 */
+	private void writeMultiLine(String key, String value) throws IOException {
 		// determine separator line which does not occur in value:
 		Set<String> valueLines = Set.of(value.split("(?s)\n"));
 		String separatorPart = "----";
@@ -240,9 +243,7 @@ class GitHubVariableWriter implements AutoCloseable {
 			separator = separator + separatorPart;
 		}
 
-		// write in multiline format
-		// [https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#multiline-strings]:
-		this.writer.write(encodedKey);
+		this.writer.write(key);
 		this.writer.write("<<");
 		this.writer.write(separator);
 		this.writer.write('\n');
