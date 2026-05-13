@@ -140,7 +140,9 @@ enum ResultWriter {
 			String outputFile = config.requiredResultTypeArg();
 			Files.createDirectories((Paths.get(outputFile).getParent()));
 			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE)) {
-				writer.write(Util.toJson(props));
+				String jsonResult = Util.toJson(props);
+				System.err.format("writing to %s: %s\n", outputFile, jsonResult);
+				writer.write(jsonResult);
 				writer.write('\n');
 				writer.flush();
 			}
@@ -166,6 +168,9 @@ enum ResultWriter {
 
 	private static void writeNamedImpl(Properties props, Config config, GitHubOutputFile gitHubOutputFile) throws IOException {
 		String[] selectedKeys = config.selectedKeys();
+		if (selectedKeys == null) {
+			throw new IllegalArgumentException("invalid use of resultType " + config.resultType() + " (missing keys)");
+		}
 		String[] resultNames = Util.splitArray(config.requiredResultTypeArg(), config.resultNameSeparator(), null);
 		if (resultNames.length != selectedKeys.length && resultNames.length != 1) {
 			throw new IllegalArgumentException("resultType " + config.resultTypeWithArg() + " has " + resultNames.length
