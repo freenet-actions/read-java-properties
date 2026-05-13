@@ -246,7 +246,7 @@ jobs:
         getAndAssertEquals "$RESULT_GETTER" empty               ''
         getAndAssertEquals "$RESULT_GETTER" null                'null'
         getAndAssertEquals "$RESULT_GETTER" unicode_escapes     'a«,»c'
-        getAndAssertEquals "$RESULT_GETTER" whitespace_escapes  $'A\tB\fC C\nD\n'
+        getAndAssertEquals "$RESULT_GETTER" whitespace_escapes  $'A\tB\fC C\r\n\nD'
         getAndAssertEquals "$RESULT_GETTER" trailing_linefeed_1 $'one trailing LF\n'
         getAndAssertEquals "$RESULT_GETTER" trailing_linefeed_2 $'two trailing LFs\n\n'
         getAndAssertEquals "$RESULT_GETTER" dash_1              '-'
