@@ -13,7 +13,13 @@ env:
 
   NOT_FOUND_STATUS: 54
   SHELL_SETUP: |-
+    debugPrintf() {
+      local pattern=$1; shift
+      printf "::debug::${pattern}" "$@" >&2
+    }
+
     assertEquals() {
+      debugPrintf 'assertEquals("%s", "%s")\n' "$1" "$2"
       if [ "$1" = "$2" ]; then
         printf 'ok: "%s" == "%s"\n' "$1" "$2" >&2
       else
@@ -45,6 +51,7 @@ env:
     # Expects JSON as stdin and extracts the value for key $1.
     getJsonValue() {
       local key=$1; shift
+      debugPrintf 'getJsonValue("%s")\n' "$key"
       jq --arg k "$key" --raw-output '.[$k] // ("" | halt_error(env.NOT_FOUND_STATUS | tonumber))'
     }
 
@@ -64,6 +71,7 @@ env:
     # Prints the value of the environment variable set for key $1 (when not using a prefix).
     getEnv() {
       local key=$1; shift
+      debugPrintf 'getEnv("%s")\n' "$key"
       local st
       if printenv -- "$key"; then
         : # OK
