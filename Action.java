@@ -139,7 +139,7 @@ enum ResultWriter {
 		public void write(Properties props, Config config) throws IOException {
 			String outputFile = config.requiredResultTypeArg();
 			Files.createDirectories((Paths.get(outputFile).getParent()));
-			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE)) {
+			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
 				String jsonResult = Util.toJson(props);
 				System.err.format("writing to %s: %s\n", outputFile, jsonResult);
 				writer.write(jsonResult);
@@ -211,7 +211,7 @@ class GitHubVariableWriter implements AutoCloseable {
 
 	public GitHubVariableWriter(String description, String fileName) throws IOException {
 		this.description = description;
-		this.writer = Util.openFile(fileName, StandardOpenOption.APPEND);
+		this.writer = Util.openFile(fileName, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 	}
 
 	public void write(String key, String value) throws IOException {
