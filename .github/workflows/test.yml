@@ -8,7 +8,7 @@ env:
   JSON_OUTPUT_FILE: tmp/out.json
   SELECTED_SINGLE_KEY: 'org.gradle.jvmargs'
   SELECTED_KEYS: 'sourceJavaVersion org.gradle.jvmargs unicode_escapes colon:in:Key'
-  SELECTED_SINGLE_NAME: 'my/prop'
+  SELECTED_SINGLE_NAME: 'my-prop'
   SELECTED_NAMES: 'java-version jvm_args unicode colon'
 
   NOT_FOUND_STATUS: 54
@@ -280,8 +280,9 @@ jobs:
     - name: 'validate "test: query multiple properties as action outputs of given names"'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output-named.outputs)}}
-        # Output names specified as input are also subject to encoding (prefix "_", replace punctuation except "_"):
-        RESULT_GETTER: encodeKeyAndGetEnvJsonValue
+        # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
+        RESULT_GETTER: getEnvJsonValue
+        UNUSED_RESULT_GETTER: encodeKeyAndGetEnvJsonValue
       run: &validateMultiNamedImpl |-
         eval "$SHELL_SETUP"
         assertEquals "$($RESULT_GETTER java-version)" '21'
@@ -295,8 +296,18 @@ jobs:
         assertUndefined $RESULT_GETTER colon:in:Key
         assertUndefined $RESULT_GETTER unicode_escapes
 
+        # The outputs with the encoded names are not set (when different from given name):
+        assertUndefined $UNUSED_RESULT_GETTER java-version
+        assertUndefined $UNUSED_RESULT_GETTER colon
+        assertUndefined $UNUSED_RESULT_GETTER unicode
+
+        # The outputs with the encoded default names are not set (when different from given name):
+        assertUndefined $UNUSED_RESULT_GETTER sourceJavaVersion
+        assertUndefined $UNUSED_RESULT_GETTER org.gradle.jvmargs
+        assertUndefined $UNUSED_RESULT_GETTER colon:in:Key
+        assertUndefined $UNUSED_RESULT_GETTER unicode_escapes
+
         # Outputs for non-selected keys are not set, for example:
-        assertUndefined $RESULT_GETTER colon:in:Key
         assertUndefined $RESULT_GETTER colonInValue
         assertUndefined $RESULT_GETTER dash_1
 
@@ -311,11 +322,12 @@ jobs:
     - name: 'validate "test: query multiple properties as action outputs of given name"'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output-named1.outputs)}}
-        # Output names specified as input are also subject to encoding (prefix "_", replace punctuation except "_"):
-        RESULT_GETTER: encodeKeyAndGetEnvJsonValue
+        # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
+        RESULT_GETTER: getEnvJsonValue
+        UNUSED_RESULT_GETTER: encodeKeyAndGetEnvJsonValue
       run: &validateMultiNamed1Impl |-
         eval "$SHELL_SETUP"
-        assertEquals "$($RESULT_GETTER my/prop)" 'c'
+        assertEquals "$($RESULT_GETTER my-prop)" 'c'
 
         # The outputs with the default names are not set:
         assertUndefined $RESULT_GETTER sourceJavaVersion
@@ -323,8 +335,16 @@ jobs:
         assertUndefined $RESULT_GETTER colon:in:Key
         assertUndefined $RESULT_GETTER unicode_escapes
 
+        # The output with the encoded name is not set:
+        assertUndefined $UNUSED_RESULT_GETTER my-prop
+
+        # The outputs with the encoded default names are not set (when different from given name):
+        assertUndefined $UNUSED_RESULT_GETTER sourceJavaVersion
+        assertUndefined $UNUSED_RESULT_GETTER org.gradle.jvmargs
+        assertUndefined $UNUSED_RESULT_GETTER colon:in:Key
+        assertUndefined $UNUSED_RESULT_GETTER unicode_escapes
+
         # Outputs for non-selected keys are not set, for example:
-        assertUndefined $RESULT_GETTER colon:in:Key
         assertUndefined $RESULT_GETTER colonInValue
         assertUndefined $RESULT_GETTER dash_1
 
