@@ -73,6 +73,11 @@ enum ConfigVariable {
 	private ConfigVariable(String inputName) {
 		this.inputName = inputName;
 	}
+
+	@Override
+	public String toString() {
+		return inputName;
+	}
 }
 
 
