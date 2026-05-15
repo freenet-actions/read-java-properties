@@ -432,32 +432,31 @@ jobs:
         RESULT_GETTER: getEnvJsonValue
       run: *validateMultiImpl
 
-    #############################################################
-    #- name: '[arrange] test: query multiple properties as JSON file (creating file)'
-    #  id: multiple-json-file-create-arrange
-    #  run: |-
-    #    dir=$(mktemp --directory --dry-run --tmpdir=./tmp test_json-file_multi_create_XXXXXX)
-    #    printf 'file=%s/out/result.json\n' "$dir" | tee -- "$GITHUB_OUTPUT"
-    #    # ⇒ action must create at least two parent dirs: $dir, $dir/out (probably one more: ./tmp)
-    #- name: '[act] test: query multiple properties as JSON file (creating file)'
-    #  uses: ./
-    #  with:
-    #    file: test/resources/test.properties
-    #    keys: '${{env.SELECTED_KEYS}}'
-    #    resultType: 'json-file:${{steps.multiple-json-file-create-arrange.outputs.file}}'
-    #- name: '[assert] test: query multiple properties as JSON file (creating file)'
-    #  env:
-    #    JSON_OUTPUT_FILE: ${{steps.multiple-json-file-create-arrange.outputs.file}}
-    #    RESULT_GETTER: getFileJsonValue
-    #  run: *validateMultiImpl
+    ############################################################
+    - name: '[arrange] test: query multiple properties as JSON file (creating file)'
+      id: multiple-json-file-create-arrange
+      run: |-
+        parentDir=$(mktemp --directory --dry-run --tmpdir=. test_json-file_multi_create_XXXXXX)
+        file=$parentDir/out/result.json
+        printf 'file=%s\n' "$file" | tee -- "$GITHUB_OUTPUT"
+        # ⇒ action must create at least two parent dirs
+    - name: '[act] test: query multiple properties as JSON file (creating file)'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'json-file:${{steps.multiple-json-file-create-arrange.outputs.file}}'
+    - name: '[assert] test: query multiple properties as JSON file (creating file)'
+      env:
+        JSON_OUTPUT_FILE: ${{steps.multiple-json-file-create-arrange.outputs.file}}
+        RESULT_GETTER: getFileJsonValue
+      run: *validateMultiImpl
 
     ############################################################
     - name: '[arrange] test: query multiple properties as JSON file (overwriting file)'
       id: multiple-json-file-overwrite-arrange
       run: |-
-        mkdir --parents tmp
-        chmod --changes u+rwx tmp
-        file=$(mktemp --tmpdir=./tmp test_json-file_multi_overwrite_XXXXXX.json)
+        file=$(mktemp --tmpdir=. test_json-file_multi_overwrite_XXXXXX.json)
         # Write longer contents than the expected output. ⇒ If the action does not truncate, there will be
         # non-parseable remains and parsing in function getFileJsonValue will fail.
         for ((i=0; i<100; i++)); do printf 'This is ¬ JS}ON. '; done >"$file"
@@ -481,9 +480,7 @@ jobs:
       # Distinction between creating and overwriting need not be tested again.
       # This test just uses an existing empty file.
       run: |-
-        mkdir --parents tmp
-        chmod --changes u+rwx tmp
-        printf 'file=%s\n' "$(mktemp --tmpdir=tmp test_json-file_all_XXXXXX.json)" | tee -- "$GITHUB_OUTPUT"
+        printf 'file=%s\n' "$(mktemp --tmpdir=. test_json-file_all_XXXXXX.json)" | tee -- "$GITHUB_OUTPUT"
     - name: '[act] test: query all properties as JSON file'
       uses: ./
       with:
