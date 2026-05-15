@@ -347,7 +347,7 @@ jobs:
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output-named1.outputs)}}
         # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
-        RESULT_GETTER: getEnvJsonValue
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: &validateMultiNamed1Impl |-
         eval "$SHELL_SETUP"
         evalAndAssertEquals "$RESULT_GETTER" my-prop 'c'
