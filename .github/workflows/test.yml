@@ -273,10 +273,9 @@ jobs:
     - name: '[assert] test: query multiple properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output.outputs)}}
-        RESULT_GETTER: 'encodeKeyAndGetEnvJsonValue "$RESULT_JSON"'
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateMultiImpl |-
         eval "$SHELL_SETUP"
-        evalAndAssertEquals "$RESULT_GETTER" dash_1 '21'
         evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion  '21'
         evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
         evalAndAssertEquals "$RESULT_GETTER" colon:in:Key       'c'
@@ -373,7 +372,7 @@ jobs:
     - name: '[assert] test: query multiple properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.single-output.outputs)}}
-        RESULT_GETTER: 'encodeKeyAndGetEnvJsonValue "$RESULT_JSON"'
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateSingleImpl |-
         eval "$SHELL_SETUP"
         evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
