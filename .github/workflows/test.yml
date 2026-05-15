@@ -4,7 +4,6 @@ defaults:
   run:
     shell: bash
 env:
-  ENV_VAR_PREFIX: PROP_TEST__
   SELECTED_SINGLE_KEY: 'org.gradle.jvmargs'
   SELECTED_KEYS: 'sourceJavaVersion org.gradle.jvmargs unicode_escapes colon:in:Key'
   SELECTED_SINGLE_NAME: 'my-prop'
@@ -13,8 +12,7 @@ env:
   NOT_FOUND_STATUS: 54
   SHELL_SETUP: |-
     debugPrintf() {
-      local pattern=$1; shift
-      printf "::debug::${pattern}" "$@" >&2
+      printf "$@" | sed 's/^/::debug::/g' >&2
     }
 
     # Reads stdin and replaces one linefeed at the end of the input with "¶". Exits with non-zero status if that LF is
@@ -38,26 +36,42 @@ env:
       fi
     }
 
-    # Queries a value by calling command $1 with the remaining args and expects it to exit with status $NOT_FOUND_STATUS.
-    getAndAssertEquals() {
+    # The last argument is the expected result. All other arguments are treated as a command (with arguments)
+    # to be evaluated which outputs the actual result. Both results are then asserted to be equal.
+    #
+    # Also, unlike directly using the form
+    #   assertEquals "$(eval "$RESULT_GETTER 'key with spaces')" 'expected value'
+    # this function does not swallow a non-zero exit status in $RESULT_GETTER (but returns with that error
+    # status and skips the assertion).
+    #
+    # Of the arguments which form the command, only the first is evaled, the rest is treated literally.
+    # That odd behavior is useful for how the steps for similar test cases are written: They require
+    # different ways to get a result; for example, one needs `getJsonValue "$RESULT"` and another one
+    # `getJsonValue "$(<"$RESULT_FILE")`; this difference is moved to environment variables in order to keep
+    # the script identical, so it can be reused with a YAML anchor.
+    # Example usage: evalAndAssertEquals "$RESULT_GETTER" 'key with spaces' 'expected value'
+    # with RESULT_GETTER set to 'getJsonValue "$RESULT"'.
+    evalAndAssertEquals() {
       local getterFunction=$1; shift
-      local key=$1; shift
-      local expectedValue=$1; shift
-      local value st
-      # Invocation of $getterFunction must not ignore its return status. This is why tests use this function in the form
-      #   getAndAssertEquals $RESULT_GETTER "$key" "$expectedValue"
-      # instead of
-      #   assertEquals "$($RESULT_GETTER "$key")" "$expectedValue"
-      value="$(set -o pipefail; "$getterFunction" "$key" | replaceLastLF)"
+      local args=("$@")
+      local expectedValue="${args[@]:${#args[@]}-1}"
+      args=("${args[@]:0:${#args[@]}-1}")
+
+      local quotedArgs value
+      quotedArgs=$(printf ' %q' "${args[@]}")
+      eval "value=\$(set -o pipefail; ${getterFunction}${quotedArgs} | replaceLastLF)"
       expectedValue="$(printf '%s\n' "$expectedValue" | replaceLastLF)"
       assertEquals "$value" "$expectedValue"
     }
 
     # Queries a value by calling command $1 with the remaining args and expects it to exit with status $NOT_FOUND_STATUS.
-    getAndAssertUndefined() {
+    # The command is handled like in →evalAndAssertEquals (except that there is no expected value as last argument which
+    # is not passed to the command).
+    evalAndAssertUndefined() {
       local getterFunction=$1; shift
-      local value st
-      if value="$("$getterFunction" "$@")"; then
+      local quotedArgs value st
+      quotedArgs=$(printf ' %q' "$@")
+      if eval "value=\$(${getterFunction}${quotedArgs})"; then
         printf 'assertion error: %s == "%s", expected undefined\n' "$*" "$value" >&2
         return 1
       elif [ ${st-$?} -eq "$NOT_FOUND_STATUS" ]; then
@@ -68,30 +82,21 @@ env:
       fi
     }
 
-    # The following helper functions to get a value for a given property key from the result have a uniform
-    # API (property key as sole argument) so that the actual test code can be identical (and thereby reusable
-    # with YAML anchors) for different result types. This leads to some assumptions which might seem
-    # a little odd, like variable JSON_OUTPUT_FILE must contain the name of the JSON result instead of passing
-    # that name as an argument.
-
-    # Expects JSON as stdin and extracts the value for key $1.
+    # Extracts the value for key $2 from JSON $1.
     getJsonValue() {
+      local json=$1; shift
       local key=$1; shift
-      debugPrintf 'getJsonValue("%s")\n' "$key"
-      jq --arg k "$key" --raw-output '.[$k] // ("" | halt_error(env.NOT_FOUND_STATUS | tonumber))'
+      debugPrintf 'getJsonValue("%s", "%s")\n' "$json" "$key"
+      jq --arg k "$key" --raw-output '.[$k] // ("" | halt_error(env.NOT_FOUND_STATUS | tonumber))' <<<"$json"
     }
 
-    # Expects JSON in variable RESULT_JSON and extracts the value for key $1.
-    getEnvJsonValue() {
-      getJsonValue "$@" <<<"$RESULT_JSON"
-    }
-
-    # Expects JSON in variable RESULT_JSON and extracts the value for key <output-style encoding of $1>.
-    encodeKeyAndGetEnvJsonValue() {
+    # Extracts the value for key <output-style encoding of $2> from JSON $2.
+    encodeKeyAndGetJsonValue() {
+      local json=$1; shift
       local key=$1; shift
       local encodedKey
       encodedKey="_$(perl -pe 's=((?!_)[[:punct:]])= sprintf("-%04X", ord($1)) =ge' <<<"$key")"
-      getEnvJsonValue "$encodedKey" "$@"
+      getJsonValue "$json" "$encodedKey" "$@"
     }
 
     # Prints the value of the environment variable set for key $1 (when not using a prefix).
@@ -109,15 +114,11 @@ env:
       fi
     }
 
-    # Prints the value of the environment variable set for key $1 when using a prefix.
+    # Prints the value of the environment variable set for key $2 when using a prefix $1.
     getEnvWithPrefix() {
+      local prefix=$1; shift
       local key=$1; shift
-      getEnv "${ENV_VAR_PREFIX}${key}" "$@"
-    }
-
-    getFileJsonValue() {
-      debugPrintf 'getFileJsonValue("%s") with file contents "%s"\n' "$*" "$(<"$JSON_OUTPUT_FILE")"
-      getJsonValue "$@" <"$JSON_OUTPUT_FILE"
+      getEnv "${prefix}${key}" "$@"
     }
 
 jobs:
@@ -233,36 +234,36 @@ jobs:
     - name: '[assert] test: query all properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.all-output.outputs)}}
-        RESULT_GETTER: encodeKeyAndGetEnvJsonValue
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateAllImpl |-
         eval "$SHELL_SETUP"
-        getAndAssertEquals "$RESULT_GETTER" sourceJavaVersion   '21'
-        getAndAssertEquals "$RESULT_GETTER" targetJavaVersion   '17'
-        getAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs  '-ea -showversion'
-        getAndAssertEquals "$RESULT_GETTER" colon:in:Key        'c'
-        getAndAssertEquals "$RESULT_GETTER" colonInValue        'cv:'
-        getAndAssertEquals "$RESULT_GETTER" dash-in-Key         'd'
-        getAndAssertEquals "$RESULT_GETTER" dashInValue         'd-'
-        getAndAssertEquals "$RESULT_GETTER" empty               ''
-        getAndAssertEquals "$RESULT_GETTER" null                'null'
-        getAndAssertEquals "$RESULT_GETTER" unicode_escapes     'a«,»c'
-        getAndAssertEquals "$RESULT_GETTER" whitespace_escapes  $'A\tB\fC C\r\n\nD'
-        getAndAssertEquals "$RESULT_GETTER" trailing_linefeed_1 $'one trailing LF\n'
-        getAndAssertEquals "$RESULT_GETTER" trailing_linefeed_2 $'two trailing LFs\n\n'
-        getAndAssertEquals "$RESULT_GETTER" dash_1              '-'
-        getAndAssertEquals "$RESULT_GETTER" dash_2              '--'
-        getAndAssertEquals "$RESULT_GETTER" dash_3              '---'
-        getAndAssertEquals "$RESULT_GETTER" dash_4              '----'
-        getAndAssertEquals "$RESULT_GETTER" dash_5              '-----'
-        getAndAssertEquals "$RESULT_GETTER" dash_6              '------'
-        getAndAssertEquals "$RESULT_GETTER" dash_7              '-------'
-        getAndAssertEquals "$RESULT_GETTER" dash_8              '--------'
-        getAndAssertEquals "$RESULT_GETTER" dash_9              '---------'
-        getAndAssertEquals "$RESULT_GETTER" dash_10             '----------'
-        getAndAssertEquals "$RESULT_GETTER" dash_11             '-----------'
-        getAndAssertEquals "$RESULT_GETTER" dash_12             '------------'
-        getAndAssertEquals "$RESULT_GETTER" dash_3_4_1          $'---\n----\n-'
-        getAndAssertEquals "$RESULT_GETTER" dash_3_4_8_1        $'---\n----\n--------\n-'
+        evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion   '21'
+        evalAndAssertEquals "$RESULT_GETTER" targetJavaVersion   '17'
+        evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs  '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" colon:in:Key        'c'
+        evalAndAssertEquals "$RESULT_GETTER" colonInValue        'cv:'
+        evalAndAssertEquals "$RESULT_GETTER" dash-in-Key         'd'
+        evalAndAssertEquals "$RESULT_GETTER" dashInValue         'd-'
+        evalAndAssertEquals "$RESULT_GETTER" empty               ''
+        evalAndAssertEquals "$RESULT_GETTER" null                'null'
+        evalAndAssertEquals "$RESULT_GETTER" unicode_escapes     'a«,»c'
+        evalAndAssertEquals "$RESULT_GETTER" whitespace_escapes  $'A\tB\fC C\r\n\nD'
+        evalAndAssertEquals "$RESULT_GETTER" trailing_linefeed_1 $'one trailing LF\n'
+        evalAndAssertEquals "$RESULT_GETTER" trailing_linefeed_2 $'two trailing LFs\n\n'
+        evalAndAssertEquals "$RESULT_GETTER" dash_1              '-'
+        evalAndAssertEquals "$RESULT_GETTER" dash_2              '--'
+        evalAndAssertEquals "$RESULT_GETTER" dash_3              '---'
+        evalAndAssertEquals "$RESULT_GETTER" dash_4              '----'
+        evalAndAssertEquals "$RESULT_GETTER" dash_5              '-----'
+        evalAndAssertEquals "$RESULT_GETTER" dash_6              '------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_7              '-------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_8              '--------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_9              '---------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_10             '----------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_11             '-----------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_12             '------------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_3_4_1          $'---\n----\n-'
+        evalAndAssertEquals "$RESULT_GETTER" dash_3_4_8_1        $'---\n----\n--------\n-'
 
     ############################################################
     - name: '[act] test: query multiple properties as action outputs'
@@ -274,37 +275,37 @@ jobs:
     - name: '[assert] test: query multiple properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output.outputs)}}
-        RESULT_GETTER: encodeKeyAndGetEnvJsonValue
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateMultiImpl |-
         eval "$SHELL_SETUP"
-        getAndAssertEquals "$RESULT_GETTER" sourceJavaVersion  '21'
-        getAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
-        getAndAssertEquals "$RESULT_GETTER" colon:in:Key       'c'
-        getAndAssertEquals "$RESULT_GETTER" unicode_escapes    'a«,»c'
+        evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion  '21'
+        evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" colon:in:Key       'c'
+        evalAndAssertEquals "$RESULT_GETTER" unicode_escapes    'a«,»c'
 
-        getAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
-        getAndAssertUndefined "$RESULT_GETTER" colonInValue
-        getAndAssertUndefined "$RESULT_GETTER" dash-in-Key
-        getAndAssertUndefined "$RESULT_GETTER" dashInValue
-        getAndAssertUndefined "$RESULT_GETTER" empty
-        getAndAssertUndefined "$RESULT_GETTER" null
-        getAndAssertUndefined "$RESULT_GETTER" whitespace_escapes
-        getAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_1
-        getAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_2
-        getAndAssertUndefined "$RESULT_GETTER" dash_1
-        getAndAssertUndefined "$RESULT_GETTER" dash_2
-        getAndAssertUndefined "$RESULT_GETTER" dash_3
-        getAndAssertUndefined "$RESULT_GETTER" dash_4
-        getAndAssertUndefined "$RESULT_GETTER" dash_5
-        getAndAssertUndefined "$RESULT_GETTER" dash_6
-        getAndAssertUndefined "$RESULT_GETTER" dash_7
-        getAndAssertUndefined "$RESULT_GETTER" dash_8
-        getAndAssertUndefined "$RESULT_GETTER" dash_9
-        getAndAssertUndefined "$RESULT_GETTER" dash_10
-        getAndAssertUndefined "$RESULT_GETTER" dash_11
-        getAndAssertUndefined "$RESULT_GETTER" dash_12
-        getAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
-        getAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
+        evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
+        evalAndAssertUndefined "$RESULT_GETTER" dashInValue
+        evalAndAssertUndefined "$RESULT_GETTER" empty
+        evalAndAssertUndefined "$RESULT_GETTER" null
+        evalAndAssertUndefined "$RESULT_GETTER" whitespace_escapes
+        evalAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_1
+        evalAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_2
+        evalAndAssertUndefined "$RESULT_GETTER" dash_1
+        evalAndAssertUndefined "$RESULT_GETTER" dash_2
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3
+        evalAndAssertUndefined "$RESULT_GETTER" dash_4
+        evalAndAssertUndefined "$RESULT_GETTER" dash_5
+        evalAndAssertUndefined "$RESULT_GETTER" dash_6
+        evalAndAssertUndefined "$RESULT_GETTER" dash_7
+        evalAndAssertUndefined "$RESULT_GETTER" dash_8
+        evalAndAssertUndefined "$RESULT_GETTER" dash_9
+        evalAndAssertUndefined "$RESULT_GETTER" dash_10
+        evalAndAssertUndefined "$RESULT_GETTER" dash_11
+        evalAndAssertUndefined "$RESULT_GETTER" dash_12
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
 
     ############################################################
     - name: '[act] test: query multiple properties as action outputs of given names'
@@ -318,23 +319,23 @@ jobs:
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output-named.outputs)}}
         # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
-        RESULT_GETTER: getEnvJsonValue
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: &validateMultiNamedImpl |-
         eval "$SHELL_SETUP"
-        getAndAssertEquals "$RESULT_GETTER" java-version '21'
-        getAndAssertEquals "$RESULT_GETTER" jvm_args     '-ea -showversion'
-        getAndAssertEquals "$RESULT_GETTER" colon        'c'
-        getAndAssertEquals "$RESULT_GETTER" unicode      'a«,»c'
+        evalAndAssertEquals "$RESULT_GETTER" java-version '21'
+        evalAndAssertEquals "$RESULT_GETTER" jvm_args     '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" colon        'c'
+        evalAndAssertEquals "$RESULT_GETTER" unicode      'a«,»c'
 
         # The outputs with the default names are not set:
-        getAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
-        getAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
-        getAndAssertUndefined "$RESULT_GETTER" colon:in:Key
-        getAndAssertUndefined "$RESULT_GETTER" unicode_escapes
+        evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
+        evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
+        evalAndAssertUndefined "$RESULT_GETTER" unicode_escapes
 
         # Outputs for non-selected keys are not set, for example:
-        getAndAssertUndefined "$RESULT_GETTER" colonInValue
-        getAndAssertUndefined "$RESULT_GETTER" dash_1
+        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" dash_1
 
     ############################################################
     - name: '[act] test: query multiple properties as action outputs of given name'
@@ -348,20 +349,20 @@ jobs:
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output-named1.outputs)}}
         # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
-        RESULT_GETTER: getEnvJsonValue
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: &validateMultiNamed1Impl |-
         eval "$SHELL_SETUP"
-        getAndAssertEquals "$RESULT_GETTER" my-prop 'c'
+        evalAndAssertEquals "$RESULT_GETTER" my-prop 'c'
 
         # The outputs with the default names are not set:
-        getAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
-        getAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
-        getAndAssertUndefined "$RESULT_GETTER" colon:in:Key
-        getAndAssertUndefined "$RESULT_GETTER" unicode_escapes
+        evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
+        evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
+        evalAndAssertUndefined "$RESULT_GETTER" unicode_escapes
 
         # Outputs for non-selected keys are not set, for example:
-        getAndAssertUndefined "$RESULT_GETTER" colonInValue
-        getAndAssertUndefined "$RESULT_GETTER" dash_1
+        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" dash_1
 
     ############################################################
     - name: '[act] test: query single property as action outputs'
@@ -373,37 +374,37 @@ jobs:
     - name: '[assert] test: query multiple properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.single-output.outputs)}}
-        RESULT_GETTER: encodeKeyAndGetEnvJsonValue
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateSingleImpl |-
         eval "$SHELL_SETUP"
-        getAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
 
-        getAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
-        getAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
-        getAndAssertUndefined "$RESULT_GETTER" colon:in:Key
-        getAndAssertUndefined "$RESULT_GETTER" colonInValue
-        getAndAssertUndefined "$RESULT_GETTER" dash-in-Key
-        getAndAssertUndefined "$RESULT_GETTER" dashInValue
-        getAndAssertUndefined "$RESULT_GETTER" empty
-        getAndAssertUndefined "$RESULT_GETTER" null
-        getAndAssertUndefined "$RESULT_GETTER" whitespace_escapes
-        getAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_1
-        getAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_2
-        getAndAssertUndefined "$RESULT_GETTER" unicode_escapes
-        getAndAssertUndefined "$RESULT_GETTER" dash_1
-        getAndAssertUndefined "$RESULT_GETTER" dash_2
-        getAndAssertUndefined "$RESULT_GETTER" dash_3
-        getAndAssertUndefined "$RESULT_GETTER" dash_4
-        getAndAssertUndefined "$RESULT_GETTER" dash_5
-        getAndAssertUndefined "$RESULT_GETTER" dash_6
-        getAndAssertUndefined "$RESULT_GETTER" dash_7
-        getAndAssertUndefined "$RESULT_GETTER" dash_8
-        getAndAssertUndefined "$RESULT_GETTER" dash_9
-        getAndAssertUndefined "$RESULT_GETTER" dash_10
-        getAndAssertUndefined "$RESULT_GETTER" dash_11
-        getAndAssertUndefined "$RESULT_GETTER" dash_12
-        getAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
-        getAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
+        evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
+        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
+        evalAndAssertUndefined "$RESULT_GETTER" dashInValue
+        evalAndAssertUndefined "$RESULT_GETTER" empty
+        evalAndAssertUndefined "$RESULT_GETTER" null
+        evalAndAssertUndefined "$RESULT_GETTER" whitespace_escapes
+        evalAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_1
+        evalAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_2
+        evalAndAssertUndefined "$RESULT_GETTER" unicode_escapes
+        evalAndAssertUndefined "$RESULT_GETTER" dash_1
+        evalAndAssertUndefined "$RESULT_GETTER" dash_2
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3
+        evalAndAssertUndefined "$RESULT_GETTER" dash_4
+        evalAndAssertUndefined "$RESULT_GETTER" dash_5
+        evalAndAssertUndefined "$RESULT_GETTER" dash_6
+        evalAndAssertUndefined "$RESULT_GETTER" dash_7
+        evalAndAssertUndefined "$RESULT_GETTER" dash_8
+        evalAndAssertUndefined "$RESULT_GETTER" dash_9
+        evalAndAssertUndefined "$RESULT_GETTER" dash_10
+        evalAndAssertUndefined "$RESULT_GETTER" dash_11
+        evalAndAssertUndefined "$RESULT_GETTER" dash_12
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
 
     ############################################################
     - name: '[act] test: query all properties as JSON action output'
@@ -415,7 +416,7 @@ jobs:
     - name: '[assert] test: query all properties as JSON action output'
       env:
         RESULT_JSON: ${{steps.all-json.outputs.json}}
-        RESULT_GETTER: getEnvJsonValue
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: *validateAllImpl
 
     ############################################################
@@ -429,7 +430,7 @@ jobs:
     - name: '[assert] test: query multiple properties as JSON action output'
       env:
         RESULT_JSON: ${{steps.multiple-json.outputs.json}}
-        RESULT_GETTER: getEnvJsonValue
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: *validateMultiImpl
 
     ############################################################
@@ -449,7 +450,7 @@ jobs:
     - name: '[assert] test: query multiple properties as JSON file (creating file)'
       env:
         JSON_OUTPUT_FILE: ${{steps.multiple-json-file-create-arrange.outputs.file}}
-        RESULT_GETTER: getFileJsonValue
+        RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateMultiImpl
 
     ############################################################
@@ -471,7 +472,7 @@ jobs:
     - name: '[assert] test: query multiple properties as JSON file (overwriting file)'
       env:
         JSON_OUTPUT_FILE: ${{steps.multiple-json-file-overwrite-arrange.outputs.file}}
-        RESULT_GETTER: getFileJsonValue
+        RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateMultiImpl
 
     ############################################################
@@ -489,7 +490,7 @@ jobs:
     - name: '[assert] test: query all properties as JSON file'
       env:
         JSON_OUTPUT_FILE: ${{steps.all-json-file-arrange.outputs.file}}
-        RESULT_GETTER: getFileJsonValue
+        RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateAllImpl
 
 
@@ -582,10 +583,10 @@ jobs:
       uses: ./
       with:
         file: test/resources/test.properties
-        resultType: 'env:${{env.ENV_VAR_PREFIX}}'
+        resultType: 'env:ALL_PROPS__'
     - name: '[assert] test: query all properties as environment variables'
       env:
-        RESULT_GETTER: getEnvWithPrefix
+        RESULT_GETTER: 'getEnvWithPrefix ALL_PROPS__'
       run: *validateAllImpl
 
   ############################################################
@@ -598,10 +599,10 @@ jobs:
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
-        resultType: 'env:${{env.ENV_VAR_PREFIX}}'
+        resultType: 'env:MULTI_PROPS__'
     - name: '[assert] test: query multiple properties as environment variables with prefix'
       env:
-        RESULT_GETTER: getEnvWithPrefix
+        RESULT_GETTER: 'getEnvWithPrefix MULTI_PROPS__'
       run: *validateMultiImpl
 
   ############################################################
@@ -614,8 +615,8 @@ jobs:
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_SINGLE_KEY}}'
-        resultType: 'env:${{env.ENV_VAR_PREFIX}}'
+        resultType: 'env:PROP__'
     - name: '[assert] test: query single property as environment variable with prefix'
       env:
-        RESULT_GETTER: getEnvWithPrefix
+        RESULT_GETTER: 'getEnvWithPrefix PROP__'
       run: *validateSingleImpl
