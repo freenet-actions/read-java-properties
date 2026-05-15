@@ -240,6 +240,7 @@ jobs:
         evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion   '21'
         evalAndAssertEquals "$RESULT_GETTER" targetJavaVersion   '17'
         evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs  '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" 'space in Key'      'sp'
         evalAndAssertEquals "$RESULT_GETTER" colon:in:Key        'c'
         evalAndAssertEquals "$RESULT_GETTER" colonInValue        'cv:'
         evalAndAssertEquals "$RESULT_GETTER" dash-in-Key         'd'
@@ -284,6 +285,7 @@ jobs:
         evalAndAssertEquals "$RESULT_GETTER" unicode_escapes    'a«,»c'
 
         evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
         evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
         evalAndAssertUndefined "$RESULT_GETTER" dashInValue
@@ -382,6 +384,7 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
         evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
         evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
+        evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
         evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
         evalAndAssertUndefined "$RESULT_GETTER" dashInValue
