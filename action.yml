@@ -27,7 +27,7 @@ inputs:
       Encoding replaces all punctuation or whitespace characters except the underscore ("_") with "-" followed by four hex digits
       of its unicode code point. For example, for a property key "a.b-c_d", resultType "output" sets an output with name
       "a-002Eb-002Dc_d".  
-      Additionally, set output "value" to the last found value, if any (which is only usefull if `keys` is non-empty, i.e. last given key wins; without keys, the last property in the undefined java.util.Properties iteration order wins).
+      Additionally, set output "value" to the last found value, unless `keys` is empty. I.e. last given key wins. (Without keys, this output is not set, because it would be arbitrary due to the "random" iteration order of the used Java class java.util.Properties.)
       - "output-named:<names>": <names> is a `resultNameSeparator`-separated list of output names of the same length as (the `keySeparator`-separated list) `keys`. The value for `keys[i]` is set as output `<names>[i]`. In order not to hide any future builtin outputs of this action, it is recommended to prefix each name with an underscore ("_"). In this mode, `keys` is required. Unlike "output", names are taken as-is. (This is because no official output naming rules seem to exist yet; so maybe a future user will know better how to choose valid characters than we would implement now.)
       - "output-named:<name>": Special case: A single name is supported even with multiple `keys`. All found values for the keys are set as the same output; the last found key wins. In this mode, `keys` is required.
       - "env": For each property key <k>, set an environment variable <k>.

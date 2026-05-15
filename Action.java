@@ -28,9 +28,10 @@ public class Action {
 			Config config = Config.fromEnv();
 			ResultWriter resultWriter = ResultWriter.of(config.resultType());
 			for (String file : args) {
-				Properties properties = config.selectedKeys() == null ? Util.readProperties(file)
-				        : Util.selectProperties(Util.readProperties(file), config.selectedKeys(), file);
-				resultWriter.write(properties, config);
+				Properties properties = Util.readProperties(file);
+				Properties selectedProperties = config.selectedKeys().map(keys -> Util.selectProperties(properties, keys, file))
+				        .orElse(properties);
+				resultWriter.write(selectedProperties, config);
 			}
 		} catch (OutputException e) {
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
@@ -81,8 +82,8 @@ enum ConfigVariable {
 }
 
 
-record Config(List<String> selectedKeys, String keySeparator, String resultTypeWithArg, String resultType, String resultTypeArg,
-        String resultNameSeparator, String outputPrefix) {
+record Config(Optional<List<String>> selectedKeys, String keySeparator, String resultTypeWithArg, String resultType,
+        String resultTypeArg, String resultNameSeparator, String outputPrefix) {
 	public static Config fromEnv() {
 		// In order to keep the defaults DRY (in action.yml), the environment variables are all mandatory.
 		String keySeparator = Util.getRequiredEnv(ConfigVariable.KEY_SEPARATOR);
@@ -101,8 +102,8 @@ record Config(List<String> selectedKeys, String keySeparator, String resultTypeW
 		String resultType = matcher.group(1);
 		String resultTypeArg = Optional.ofNullable(matcher.group(2)).orElse("");
 		String outputPrefix = Util.getRequiredEnv(ConfigVariable.OUTPUT_PREFIX);
-		return new Config(keys.map(List::of).orElse(null), keySeparator, resultTypeWithArg, resultType, resultTypeArg,
-		        resultNameSeparator, outputPrefix);
+		return new Config(keys.map(List::of), keySeparator, resultTypeWithArg, resultType, resultTypeArg, resultNameSeparator,
+		        outputPrefix);
 	}
 
 	public String requiredResultTypeArg() {
@@ -137,7 +138,7 @@ enum ResultWriter {
 
 				// TODO props must be in order of config.selectedKeys()
 				// Otherwise, this is arbitrary:
-				if (lastValue != null) {
+				if (config.selectedKeys().isPresent() && lastValue != null) {
 					writer.write("value", lastValue);
 				}
 			}
@@ -218,11 +219,9 @@ enum ResultWriter {
 	public abstract void write(Properties props, Config config) throws IOException;
 
 	private static void writeNamedImpl(Properties props, Config config, GitHubOutputFile gitHubOutputFile) throws IOException {
-		List<String> selectedKeys = config.selectedKeys();
-		if (selectedKeys == null) {
-			throw OutputException.forIllegalArgument(
-			        "invalid use of " + ConfigVariable.RESULT_TYPE + " " + config.resultType() + " (missing keys)");
-		}
+		List<String> selectedKeys = config.selectedKeys().orElseThrow(() -> OutputException.forIllegalArgument("invalid use of "
+		        + ConfigVariable.RESULT_TYPE + " " + config.resultType() + " (missing " + ConfigVariable.KEYS + ")"));
+
 		@SuppressWarnings("java:S3655") // Sonar rule: "Optional value should only be accessed after calling isPresent()".
 		// requiredResultTypeArg() is not empty, so splitArray returns non-empty
 		String[] resultNames = Util.splitArray(config.requiredResultTypeArg(), config.resultNameSeparator()).get();
