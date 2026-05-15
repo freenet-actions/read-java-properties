@@ -448,7 +448,7 @@ jobs:
     - name: '[assert] test: query multiple properties as JSON file (creating file)'
       env:
         JSON_OUTPUT_FILE: ${{steps.multiple-json-file-create-arrange.outputs.file}}
-        RESULT_GETTER: 'getJsonValue "$(<$"JSON_OUTPUT_FILE")"'
+        RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateMultiImpl
 
     ############################################################
