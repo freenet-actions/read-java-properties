@@ -35,11 +35,63 @@ public class Action {
 			}
 		} catch (OutputException e) {
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
-				// This output is not documented
-				writer.write("error", e.getMessage());
+				writer.write(Ids.OutputName.ERROR, e.getMessage());
 			}
 			throw e;
 		}
+	}
+}
+
+
+/**
+ * Identifiers which must match those specified in the action YAML.
+ */
+class Ids {
+	private Ids() {}
+
+	/**
+	 * Configuration environment variable names and their corresponding action input names for error messages.
+	 */
+	enum ConfigVariable {
+		FILE("file"), //
+		KEYS("keys"), //
+		RESULT_TYPE("resultType"), //
+		KEY_SEPARATOR("keySeparator"), //
+		RESULT_NAME_SEPARATOR("resultNameSeparator"), //
+		OUTPUT_PREFIX(null);
+
+		public final String externalName;
+
+		private ConfigVariable(String externalName) {
+			this.externalName = externalName;
+		}
+
+		@Override
+		public String toString() {
+			return externalName;
+		}
+	}
+
+	enum ResultWriterName {
+		OUTPUT("output"), //
+		OUTPUT_NAMED("output-named"), //
+		ENV_NAMED("env-named"), //
+		ENV("env"), //
+		JSON("json"), //
+		JSON_FILE("json-file");
+
+		public final String externalName;
+
+		private ResultWriterName(String externalName) {
+			this.externalName = externalName;
+		}
+	}
+
+	enum OutputName {
+		JSON, //
+		VALUE, //
+		ERROR; // This output is not documented.
+		public final String externalName = name().toLowerCase();
 	}
 }
 
@@ -58,50 +110,26 @@ class OutputException extends RuntimeException {
 }
 
 
-/**
- * Configuration environment variable names and their corresponding action input names for error messages.
- */
-enum ConfigVariable {
-	FILE("file"), //
-	KEYS("keys"), //
-	RESULT_TYPE("resultType"), //
-	KEY_SEPARATOR("keySeparator"), //
-	RESULT_NAME_SEPARATOR("resultNameSeparator"), //
-	OUTPUT_PREFIX(null);
-
-	public final String inputName;
-
-	private ConfigVariable(String inputName) {
-		this.inputName = inputName;
-	}
-
-	@Override
-	public String toString() {
-		return inputName;
-	}
-}
-
-
 record Config(Optional<List<String>> selectedKeys, String keySeparator, String resultTypeWithArg, String resultType,
         String resultTypeArg, String resultNameSeparator, String outputPrefix) {
 	public static Config fromEnv() {
 		// In order to keep the defaults DRY (in action.yml), the environment variables are all mandatory.
-		String keySeparator = Util.getRequiredEnv(ConfigVariable.KEY_SEPARATOR);
+		String keySeparator = Util.getRequiredEnv(Ids.ConfigVariable.KEY_SEPARATOR);
 		// System.getenv("KEYS") == null if set to empty string?! So this cannot be checked to be set if we want to allow empty
 		// string:
-		String keysStr = System.getenv().getOrDefault(ConfigVariable.KEYS.name(), "");
+		String keysStr = System.getenv().getOrDefault(Ids.ConfigVariable.KEYS.name(), "");
 		Optional<String[]> keys = Util.splitArray(keysStr, keySeparator);
-		String resultNameSeparator = Util.getRequiredEnv(ConfigVariable.RESULT_NAME_SEPARATOR);
+		String resultNameSeparator = Util.getRequiredEnv(Ids.ConfigVariable.RESULT_NAME_SEPARATOR);
 
 		// RESULT_TYPE format: "<mode>[:<arg>]"
-		String resultTypeWithArg = Util.getRequiredEnv(ConfigVariable.RESULT_TYPE);
+		String resultTypeWithArg = Util.getRequiredEnv(Ids.ConfigVariable.RESULT_TYPE);
 		Matcher matcher = Pattern.compile("([^:]+)(?::(.*))?").matcher(resultTypeWithArg);
 		if (!matcher.matches()) {
-			throw OutputException.forIllegalArgument("invalid " + ConfigVariable.RESULT_TYPE + ": " + resultTypeWithArg);
+			throw OutputException.forIllegalArgument("invalid " + Ids.ConfigVariable.RESULT_TYPE + ": " + resultTypeWithArg);
 		}
 		String resultType = matcher.group(1);
 		String resultTypeArg = Optional.ofNullable(matcher.group(2)).orElse("");
-		String outputPrefix = Util.getRequiredEnv(ConfigVariable.OUTPUT_PREFIX);
+		String outputPrefix = Util.getRequiredEnv(Ids.ConfigVariable.OUTPUT_PREFIX);
 		return new Config(keys.map(List::of), keySeparator, resultTypeWithArg, resultType, resultTypeArg, resultNameSeparator,
 		        outputPrefix);
 	}
@@ -110,7 +138,7 @@ record Config(Optional<List<String>> selectedKeys, String keySeparator, String r
 		String arg = resultTypeArg();
 		if ("".equals(arg)) {
 			throw OutputException.forIllegalArgument(
-			        "invalid " + ConfigVariable.RESULT_TYPE + " " + resultTypeWithArg() + " (missing argument)");
+			        "invalid " + Ids.ConfigVariable.RESULT_TYPE + " " + resultTypeWithArg() + " (missing argument)");
 		}
 		return arg;
 	}
@@ -118,14 +146,14 @@ record Config(Optional<List<String>> selectedKeys, String keySeparator, String r
 	public void requireNoArg() {
 		if (!"".equals(resultTypeArg())) {
 			throw OutputException.forIllegalArgument(
-			        "invalid " + ConfigVariable.RESULT_TYPE + " " + resultTypeWithArg() + " (non-empty argument)");
+			        "invalid " + Ids.ConfigVariable.RESULT_TYPE + " " + resultTypeWithArg() + " (non-empty argument)");
 		}
 	}
 }
 
 
 enum ResultWriter {
-	OUTPUT("output") {
+	OUTPUT(Ids.ResultWriterName.OUTPUT) {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
 			String lastValue = null;
@@ -139,7 +167,7 @@ enum ResultWriter {
 				// TODO props must be in order of config.selectedKeys()
 				// Otherwise, this is arbitrary:
 				if (config.selectedKeys().isPresent() && lastValue != null) {
-					writer.write("value", lastValue);
+					writer.write(Ids.OutputName.VALUE, lastValue);
 				}
 			}
 		}
@@ -154,19 +182,19 @@ enum ResultWriter {
 			return result.toString();
 		}
 	},
-	OUTPUT_NAMED("output-named") {
+	OUTPUT_NAMED(Ids.ResultWriterName.OUTPUT_NAMED) {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
 			writeNamedImpl(props, config, GitHubOutputFile.OUTPUT);
 		}
 	},
-	ENV_NAMED("env-named") {
+	ENV_NAMED(Ids.ResultWriterName.ENV_NAMED) {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
 			writeNamedImpl(props, config, GitHubOutputFile.ENV);
 		}
 	},
-	ENV("env") {
+	ENV(Ids.ResultWriterName.ENV) {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
 			String prefix = config.resultTypeArg();
@@ -177,16 +205,16 @@ enum ResultWriter {
 			}
 		}
 	},
-	JSON("json") {
+	JSON(Ids.ResultWriterName.JSON) {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
 			config.requireNoArg();
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
-				writer.write("json", Util.toJson(props));
+				writer.write(Ids.OutputName.JSON, Util.toJson(props));
 			}
 		}
 	},
-	JSON_FILE("json-file") {
+	JSON_FILE(Ids.ResultWriterName.JSON_FILE) {
 		@Override
 		public void write(Properties props, Config config) throws IOException {
 			String outputFile = config.requiredResultTypeArg();
@@ -201,32 +229,32 @@ enum ResultWriter {
 		}
 	};
 
-	private final String inputName;
+	private final String externalName;
 
-	private ResultWriter(String inputName) {
-		this.inputName = inputName;
+	private ResultWriter(Ids.ResultWriterName externalName) {
+		this.externalName = externalName.externalName;
 	}
 
-	public static ResultWriter of(String inputName) {
+	public static ResultWriter of(String externalName) {
 		for (ResultWriter rw : ResultWriter.values()) {
-			if (rw.inputName.equals(inputName)) {
+			if (rw.externalName.equals(externalName)) {
 				return rw;
 			}
 		}
-		throw OutputException.forIllegalArgument("invalid " + ConfigVariable.RESULT_TYPE + ": " + inputName);
+		throw OutputException.forIllegalArgument("invalid " + Ids.ConfigVariable.RESULT_TYPE + ": " + externalName);
 	}
 
 	public abstract void write(Properties props, Config config) throws IOException;
 
 	private static void writeNamedImpl(Properties props, Config config, GitHubOutputFile gitHubOutputFile) throws IOException {
 		List<String> selectedKeys = config.selectedKeys().orElseThrow(() -> OutputException.forIllegalArgument("invalid use of "
-		        + ConfigVariable.RESULT_TYPE + " " + config.resultType() + " (missing " + ConfigVariable.KEYS + ")"));
+		        + Ids.ConfigVariable.RESULT_TYPE + " " + config.resultType() + " (missing " + Ids.ConfigVariable.KEYS + ")"));
 
 		@SuppressWarnings("java:S3655") // Sonar rule: "Optional value should only be accessed after calling isPresent()".
 		// requiredResultTypeArg() is not empty, so splitArray returns non-empty
 		String[] resultNames = Util.splitArray(config.requiredResultTypeArg(), config.resultNameSeparator()).get();
 		if (resultNames.length != selectedKeys.size() && resultNames.length != 1) {
-			throw OutputException.forIllegalArgument(ConfigVariable.RESULT_TYPE + " " + config.resultTypeWithArg() + " has "
+			throw OutputException.forIllegalArgument(Ids.ConfigVariable.RESULT_TYPE + " " + config.resultTypeWithArg() + " has "
 			        + resultNames.length + " arguments, but " + selectedKeys.size() + " keys are selected");
 		}
 		try (GitHubVariableWriter writer = gitHubOutputFile.open()) {
@@ -281,6 +309,10 @@ class GitHubVariableWriter implements AutoCloseable {
 		}
 	}
 
+	public void write(Ids.OutputName key, String value) throws IOException {
+		write(key.externalName, value);
+	}
+
 	/**
 	 * Writes a key-value pair in
 	 * <a href="https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#multiline-strings">multiline
@@ -333,7 +365,7 @@ class Util {
 		return value;
 	}
 
-	public static String getRequiredEnv(ConfigVariable varName) {
+	public static String getRequiredEnv(Ids.ConfigVariable varName) {
 		return getRequiredEnv(varName.name());
 	}
 
