@@ -13,8 +13,7 @@ env:
   NOT_FOUND_STATUS: 54
   SHELL_SETUP: |-
     debugPrintf() {
-      local pattern=$1; shift
-      printf "::debug::${pattern}" "$@" >&2
+      printf "$@" | sed 's/^/::debug::/g' >&2
     }
 
     # Reads stdin and replaces one linefeed at the end of the input with "¶". Exits with non-zero status if that LF is
