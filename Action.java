@@ -142,7 +142,7 @@ enum ResultWriter {
 		public void write(Properties props, Config config) throws IOException {
 			String outputFile = config.requiredResultTypeArg();
 			Files.createDirectories((Paths.get(outputFile).getParent()));
-			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE/*TODO: , StandardOpenOption.TRUNCATE_EXISTING*/)) {
+			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
 				String jsonResult = Util.toJson(props);
 				System.err.format("writing to %s: %s%n", outputFile, jsonResult);
 				writer.write(jsonResult);
