@@ -36,19 +36,21 @@ env:
       fi
     }
 
-    # Evaluates the command given as arguments except the last argument and asserts that the command's output
-    # equals the last argument. Only the first argument is evaled, the rest is treated as literal strings.
+    # The last argument is the expected result. All other arguments are treated as a command (with arguments)
+    # to be evaluated which outputs the actual result. Both results are then asserted to be equal.
     #
-    # That odd behavior is usefull for how the steps for similar test cases are written: They require
+    # Also, unlike directly using the form
+    #   assertEquals "$(eval "$RESULT_GETTER 'key with spaces')" 'expected value'
+    # this function does not swallow a non-zero exit status in $RESULT_GETTER (but returns with that error
+    # status and skips the assertion).
+    #
+    # Of the arguments which form the command, only the first is evaled, the rest is treated literally.
+    # That odd behavior is useful for how the steps for similar test cases are written: They require
     # different ways to get a result; for example, one needs `getJsonValue "$RESULT"` and another one
     # `getJsonValue "$(<"$RESULT_FILE")`; this difference is moved to environment variables in order to keep
     # the script identical, so it can be reused with a YAML anchor.
     # Example usage: evalAndAssertEquals "$RESULT_GETTER" 'key with spaces' 'expected value'
     # with RESULT_GETTER set to 'getJsonValue "$RESULT"'.
-    #
-    # Also, unlike directly using
-    #   assertEquals "$(eval "value=$RESULT_GETTER 'key with spaces')" 'expected value'
-    # this function does not swallow a non-zero exit status in $RESULT_GETTER.
     evalAndAssertEquals() {
       local getterFunction=$1; shift
       local args=("$@")
@@ -238,6 +240,7 @@ jobs:
         evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion   '21'
         evalAndAssertEquals "$RESULT_GETTER" targetJavaVersion   '17'
         evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs  '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" 'space in Key'      'sp'
         evalAndAssertEquals "$RESULT_GETTER" colon:in:Key        'c'
         evalAndAssertEquals "$RESULT_GETTER" colonInValue        'cv:'
         evalAndAssertEquals "$RESULT_GETTER" dash-in-Key         'd'
@@ -282,6 +285,7 @@ jobs:
         evalAndAssertEquals "$RESULT_GETTER" unicode_escapes    'a«,»c'
 
         evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
         evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
         evalAndAssertUndefined "$RESULT_GETTER" dashInValue
@@ -380,6 +384,7 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
         evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
         evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
+        evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
         evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
         evalAndAssertUndefined "$RESULT_GETTER" dashInValue
