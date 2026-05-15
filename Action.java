@@ -24,13 +24,54 @@ public class Action {
 	private Action() {}
 
 	static void main(String[] args) throws Exception {
-		Config config = Config.fromEnv();
-		ResultWriter resultWriter = ResultWriter.of(config.resultType());
-		for (String file : args) {
-			Properties properties = config.selectedKeys() == null ? Util.readProperties(file)
-			        : Util.selectProperties(Util.readProperties(file), config.selectedKeys(), file);
-			resultWriter.write(properties, config);
+		try {
+			Config config = Config.fromEnv();
+			ResultWriter resultWriter = ResultWriter.of(config.resultType());
+			for (String file : args) {
+				Properties properties = config.selectedKeys() == null ? Util.readProperties(file)
+				        : Util.selectProperties(Util.readProperties(file), config.selectedKeys(), file);
+				resultWriter.write(properties, config);
+			}
+		} catch (OutputException e) {
+			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
+				// This output is not documented
+				writer.write("error", e.getMessage());
+			}
+			throw e;
 		}
+	}
+}
+
+
+/**
+ * An exception for which an "error" output should be set.
+ */
+class OutputException extends RuntimeException {
+	public OutputException(String message, Throwable cause) {
+		super(message, cause);
+	}
+
+	public static OutputException forIllegalArgument(String message) {
+		return new OutputException(message, new IllegalArgumentException(message));
+	}
+}
+
+
+/**
+ * Configuration environment variable names and their corresponding action input names for error messages.
+ */
+enum ConfigVariable {
+	FILE("file"), //
+	KEYS("keys"), //
+	RESULT_TYPE("resultType"), //
+	KEY_SEPARATOR("keySeparator"), //
+	RESULT_NAME_SEPARATOR("resultNameSeparator"), //
+	OUTPUT_PREFIX(null);
+
+	public final String inputName;
+
+	private ConfigVariable(String inputName) {
+		this.inputName = inputName;
 	}
 }
 
@@ -39,22 +80,22 @@ record Config(List<String> selectedKeys, String keySeparator, String resultTypeW
         String resultNameSeparator, String outputPrefix) {
 	public static Config fromEnv() {
 		// In order to keep the defaults DRY (in action.yml), the environment variables are all mandatory.
-		String keySeparator = Util.getRequiredEnv("KEY_SEPARATOR");
+		String keySeparator = Util.getRequiredEnv(ConfigVariable.KEY_SEPARATOR);
 		// System.getenv("KEYS") == null if set to empty string?! So this cannot be checked to be set if we want to allow empty
 		// string:
-		String keysStr = System.getenv().getOrDefault("KEYS", "");
+		String keysStr = System.getenv().getOrDefault(ConfigVariable.KEYS.name(), "");
 		Optional<String[]> keys = Util.splitArray(keysStr, keySeparator);
-		String resultNameSeparator = Util.getRequiredEnv("RESULT_NAME_SEPARATOR");
+		String resultNameSeparator = Util.getRequiredEnv(ConfigVariable.RESULT_NAME_SEPARATOR);
 
 		// RESULT_TYPE format: "<mode>[:<arg>]"
-		String resultTypeWithArg = Util.getRequiredEnv("RESULT_TYPE");
+		String resultTypeWithArg = Util.getRequiredEnv(ConfigVariable.RESULT_TYPE);
 		Matcher matcher = Pattern.compile("([^:]+)(?::(.*))?").matcher(resultTypeWithArg);
 		if (!matcher.matches()) {
-			throw new IllegalArgumentException("invalid resultType: " + resultTypeWithArg);
+			throw OutputException.forIllegalArgument("invalid " + ConfigVariable.RESULT_TYPE + ": " + resultTypeWithArg);
 		}
 		String resultType = matcher.group(1);
 		String resultTypeArg = Optional.ofNullable(matcher.group(2)).orElse("");
-		String outputPrefix = Util.getRequiredEnv("OUTPUT_PREFIX");
+		String outputPrefix = Util.getRequiredEnv(ConfigVariable.OUTPUT_PREFIX);
 		return new Config(keys.map(List::of).orElse(null), keySeparator, resultTypeWithArg, resultType, resultTypeArg,
 		        resultNameSeparator, outputPrefix);
 	}
@@ -62,14 +103,16 @@ record Config(List<String> selectedKeys, String keySeparator, String resultTypeW
 	public String requiredResultTypeArg() {
 		String arg = resultTypeArg();
 		if ("".equals(arg)) {
-			throw new IllegalArgumentException("invalid resultType " + resultTypeWithArg() + " (missing argument)");
+			throw OutputException.forIllegalArgument(
+			        "invalid " + ConfigVariable.RESULT_TYPE + " " + resultTypeWithArg() + " (missing argument)");
 		}
 		return arg;
 	}
 
 	public void requireNoArg() {
 		if (!"".equals(resultTypeArg())) {
-			throw new IllegalArgumentException("invalid resultType " + resultTypeWithArg() + " (non-empty argument)");
+			throw OutputException.forIllegalArgument(
+			        "invalid " + ConfigVariable.RESULT_TYPE + " " + resultTypeWithArg() + " (non-empty argument)");
 		}
 	}
 }
@@ -164,7 +207,7 @@ enum ResultWriter {
 				return rw;
 			}
 		}
-		throw new IllegalArgumentException("invalid result type: " + inputName);
+		throw OutputException.forIllegalArgument("invalid " + ConfigVariable.RESULT_TYPE + ": " + inputName);
 	}
 
 	public abstract void write(Properties props, Config config) throws IOException;
@@ -172,14 +215,15 @@ enum ResultWriter {
 	private static void writeNamedImpl(Properties props, Config config, GitHubOutputFile gitHubOutputFile) throws IOException {
 		List<String> selectedKeys = config.selectedKeys();
 		if (selectedKeys == null) {
-			throw new IllegalArgumentException("invalid use of resultType " + config.resultType() + " (missing keys)");
+			throw OutputException.forIllegalArgument(
+			        "invalid use of " + ConfigVariable.RESULT_TYPE + " " + config.resultType() + " (missing keys)");
 		}
 		@SuppressWarnings("java:S3655") // Sonar rule: "Optional value should only be accessed after calling isPresent()".
 		// requiredResultTypeArg() is not empty, so splitArray returns non-empty
 		String[] resultNames = Util.splitArray(config.requiredResultTypeArg(), config.resultNameSeparator()).get();
 		if (resultNames.length != selectedKeys.size() && resultNames.length != 1) {
-			throw new IllegalArgumentException("resultType " + config.resultTypeWithArg() + " has " + resultNames.length
-			        + " arguments, but " + selectedKeys.size() + " keys are selected");
+			throw OutputException.forIllegalArgument(ConfigVariable.RESULT_TYPE + " " + config.resultTypeWithArg() + " has "
+			        + resultNames.length + " arguments, but " + selectedKeys.size() + " keys are selected");
 		}
 		try (GitHubVariableWriter writer = gitHubOutputFile.open()) {
 			for (int i = 0; i < selectedKeys.size(); i++) {
@@ -280,9 +324,13 @@ class Util {
 	public static String getRequiredEnv(String varName) {
 		String value = System.getenv(varName);
 		if (value == null || value.isEmpty()) {
-			throw new IllegalArgumentException("missing or empty environment variable " + varName);
+			throw OutputException.forIllegalArgument("missing or empty environment variable " + varName);
 		}
 		return value;
+	}
+
+	public static String getRequiredEnv(ConfigVariable varName) {
+		return getRequiredEnv(varName.name());
 	}
 
 	public static Optional<String[]> splitArray(String arrayStr, String separator) {

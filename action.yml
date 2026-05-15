@@ -45,6 +45,7 @@ outputs:
     description: The (plain) property value. Only set in certain modes, see input `resultType`.
   json:
     description: All found properties matching the `keys` input as a single-line JSON object. Only set in certain modes, see input `resultType`.
+  #error: Not documented, because it should only be parsed by our tests.
 
 runs:
   using: docker

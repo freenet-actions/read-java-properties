@@ -142,9 +142,13 @@ jobs:
         file: test/resources/test.properties
         resultType: rt1
     - name: '[assert] test (should fail): invalid input: resultType'
+      env:
+        STATUS: ${{steps.error-input-resultType.outcome}}
+        ERROR: ${{steps.error-input-resultType.outputs.error}}
       run: |-
         eval "$SHELL_SETUP"
-        assertEquals '${{steps.error-input-resultType.outcome}}' failure
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid resultType: rt1'
 
     ############################################################
     - name: '[act] test (should fail): resultType "output-named" without names'
@@ -156,9 +160,13 @@ jobs:
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'output-named:'
     - name: '[assert] test (should fail): resultType "output-named" without names'
+      env:
+        STATUS: ${{steps.error-resultType-output-without-names.outcome}}
+        ERROR: ${{steps.error-resultType-output-without-names.outputs.error}}
       run: |-
         eval "$SHELL_SETUP"
-        assertEquals '${{steps.error-resultType-output-without-names.outcome}}' failure
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid resultType output-named: (missing argument)'
 
     ############################################################
     - name: '[act] test (should fail): resultType "env-named" without names'
@@ -170,9 +178,13 @@ jobs:
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'env-named:'
     - name: '[assert] test (should fail): resultType "env-named" without names'
+      env:
+        STATUS: ${{steps.error-resultType-env-without-names.outcome}}
+        ERROR: ${{steps.error-resultType-env-without-names.outputs.error}}
       run: |-
         eval "$SHELL_SETUP"
-        assertEquals '${{steps.error-resultType-env-without-names.outcome}}' failure
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid resultType env-named: (missing argument)'
 
     ############################################################
     - name: '[act] test (should fail): resultType "output-named" without keys'
@@ -183,9 +195,13 @@ jobs:
         file: test/resources/test.properties
         resultType: 'output-named:a b'
     - name: '[assert] test (should fail): resultType "output-named" without keys'
+      env:
+        STATUS: ${{steps.error-resultType-output-without-keys.outcome}}
+        ERROR: ${{steps.error-resultType-output-without-keys.outputs.error}}
       run: |-
         eval "$SHELL_SETUP"
-        assertEquals '${{steps.error-resultType-output-without-keys.outcome}}' failure
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid use of resultType output-named (missing keys)'
 
     ############################################################
     - name: '[act] test (should fail): resultType "env-named" without keys'
@@ -196,9 +212,13 @@ jobs:
         file: test/resources/test.properties
         resultType: 'env-named:a b'
     - name: '[assert] test (should fail): resultType "env-named" without keys'
+      env:
+        STATUS: ${{steps.error-resultType-env-without-keys.outcome}}
+        ERROR: ${{steps.error-resultType-env-without-keys.outputs.error}}
       run: |-
         eval "$SHELL_SETUP"
-        assertEquals '${{steps.error-resultType-env-without-keys.outcome}}' failure
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid use of resultType env-named (missing keys)'
 
     ############################################################
     # This tests a subset of test case multi-output, but with hard-coded encoding from property key to output
