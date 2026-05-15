@@ -290,6 +290,7 @@ jobs:
       env:
         RESULT_VALUE: ${{steps.all-output.outputs.value || 'U_N_S_E_T'}}
       run: |-
+        eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" U_N_S_E_T
 
     ############################################################
@@ -340,6 +341,7 @@ jobs:
       env:
         RESULT_VALUE: ${{steps.multi-output.outputs.value}}
       run: |-
+        eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" 'c' # from last key "colon:in:Key"
 
     ############################################################
@@ -358,6 +360,7 @@ jobs:
       env:
         RESULT_VALUE: ${{steps.multi-output-2.outputs.value}}
       run: |-
+        eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" 'a«,»c' # from last key "unicode_escapes"
 
     ############################################################
@@ -395,6 +398,7 @@ jobs:
       env:
         RESULT_VALUE: ${{steps.multi-output-named.outputs.value || 'U_N_S_E_T'}}
       run: |-
+        eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" U_N_S_E_T
 
     ############################################################
