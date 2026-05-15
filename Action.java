@@ -348,7 +348,9 @@ class Util {
 
 	private static void appendJsonString(StringBuilder buffer, String s) {
 		for (char c : s.toCharArray()) {
-			if (c == '"') {
+			if (c == ' ') {
+				buffer.append(c);
+			} else if (c == '"') {
 				buffer.append('\\').append('"');
 			} else if (c == '\t') {
 				buffer.append('\\').append('t');
