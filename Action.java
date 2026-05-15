@@ -21,6 +21,8 @@ import java.util.regex.Pattern;
 
 
 public class Action {
+	private Action() {}
+
 	static void main(String[] args) throws Exception {
 		Config config = Config.fromEnv();
 		ResultWriter resultWriter = ResultWriter.of(config.resultType());
@@ -33,7 +35,7 @@ public class Action {
 }
 
 
-record Config(String[] selectedKeys, String keySeparator, String resultTypeWithArg, String resultType, String resultTypeArg,
+record Config(List<String> selectedKeys, String keySeparator, String resultTypeWithArg, String resultType, String resultTypeArg,
         String resultNameSeparator, String outputPrefix) {
 	public static Config fromEnv() {
 		// In order to keep the defaults DRY (in action.yml), the environment variables are all mandatory.
@@ -41,7 +43,7 @@ record Config(String[] selectedKeys, String keySeparator, String resultTypeWithA
 		// System.getenv("KEYS") == null if set to empty string?! So this cannot be checked to be set if we want to allow empty
 		// string:
 		String keysStr = System.getenv().getOrDefault("KEYS", "");
-		String[] keys = Util.splitArray(keysStr, keySeparator, null);
+		Optional<String[]> keys = Util.splitArray(keysStr, keySeparator);
 		String resultNameSeparator = Util.getRequiredEnv("RESULT_NAME_SEPARATOR");
 
 		// RESULT_TYPE format: "<mode>[:<arg>]"
@@ -53,7 +55,8 @@ record Config(String[] selectedKeys, String keySeparator, String resultTypeWithA
 		String resultType = matcher.group(1);
 		String resultTypeArg = Optional.ofNullable(matcher.group(2)).orElse("");
 		String outputPrefix = Util.getRequiredEnv("OUTPUT_PREFIX");
-		return new Config(keys, keySeparator, resultTypeWithArg, resultType, resultTypeArg, resultNameSeparator, outputPrefix);
+		return new Config(keys.map(List::of).orElse(null), keySeparator, resultTypeWithArg, resultType, resultTypeArg,
+		        resultNameSeparator, outputPrefix);
 	}
 
 	public String requiredResultTypeArg() {
@@ -141,7 +144,7 @@ enum ResultWriter {
 			Files.createDirectories((Paths.get(outputFile).getParent()));
 			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
 				String jsonResult = Util.toJson(props);
-				System.err.format("writing to %s: %s\n", outputFile, jsonResult);
+				System.err.format("writing to %s: %s%n", outputFile, jsonResult);
 				writer.write(jsonResult);
 				writer.write('\n');
 				writer.flush();
@@ -167,19 +170,21 @@ enum ResultWriter {
 	public abstract void write(Properties props, Config config) throws IOException;
 
 	private static void writeNamedImpl(Properties props, Config config, GitHubOutputFile gitHubOutputFile) throws IOException {
-		String[] selectedKeys = config.selectedKeys();
+		List<String> selectedKeys = config.selectedKeys();
 		if (selectedKeys == null) {
 			throw new IllegalArgumentException("invalid use of resultType " + config.resultType() + " (missing keys)");
 		}
-		String[] resultNames = Util.splitArray(config.requiredResultTypeArg(), config.resultNameSeparator(), null);
-		if (resultNames.length != selectedKeys.length && resultNames.length != 1) {
+		@SuppressWarnings("java:S3655") // Sonar rule: "Optional value should only be accessed after calling isPresent()".
+		// requiredResultTypeArg() is not empty, so splitArray returns non-empty
+		String[] resultNames = Util.splitArray(config.requiredResultTypeArg(), config.resultNameSeparator()).get();
+		if (resultNames.length != selectedKeys.size() && resultNames.length != 1) {
 			throw new IllegalArgumentException("resultType " + config.resultTypeWithArg() + " has " + resultNames.length
-			        + " arguments, but " + selectedKeys.length + " keys are selected");
+			        + " arguments, but " + selectedKeys.size() + " keys are selected");
 		}
 		try (GitHubVariableWriter writer = gitHubOutputFile.open()) {
-			for (int i = 0; i < selectedKeys.length; i++) {
+			for (int i = 0; i < selectedKeys.size(); i++) {
 				String name = resultNames[resultNames.length == 1 ? 0 : i];
-				String value = props.getProperty(selectedKeys[i]);
+				String value = props.getProperty(selectedKeys.get(i));
 				writer.write(name, value);
 			}
 		}
@@ -215,7 +220,7 @@ class GitHubVariableWriter implements AutoCloseable {
 	}
 
 	public void write(String key, String value) throws IOException {
-		System.err.format("%s %s\t:= \"%s\"\n", description, key, value);
+		System.err.format("%s %s\t:= \"%s\"%n", description, key, value);
 
 		// write (very) simple values in format "<key>=<value>":
 		if (SIMPLE_VALUE.matcher(value).matches()) {
@@ -223,7 +228,6 @@ class GitHubVariableWriter implements AutoCloseable {
 			this.writer.write('=');
 			this.writer.write(value);
 			this.writer.write('\n');
-			return;
 		} else {
 			writeMultiLine(key, value);
 		}
@@ -235,13 +239,7 @@ class GitHubVariableWriter implements AutoCloseable {
 	 * format</a>.
 	 */
 	private void writeMultiLine(String key, String value) throws IOException {
-		// determine separator line which does not occur in value:
-		Set<String> valueLines = Set.of(value.split("(?s)\n"));
-		String separatorPart = "----";
-		String separator = separatorPart;
-		while (valueLines.contains(separator)) {
-			separator = separator + separatorPart;
-		}
+		String separator = computeSeparator(value);
 
 		this.writer.write(key);
 		this.writer.write("<<");
@@ -251,6 +249,22 @@ class GitHubVariableWriter implements AutoCloseable {
 		this.writer.write('\n');
 		this.writer.write(separator);
 		this.writer.write('\n');
+	}
+
+	/**
+	 * Computes a separator line which does not occur in value.
+	 */
+	@SuppressWarnings("java:S1643") // Sonar rule: "Strings should not be concatenated using '+' in a loop".
+	// False positive: We would need that StringBuilder's toString for each iteration for the contains check anyway.
+	private static String computeSeparator(String value) {
+		Set<String> valueLines = Set.of(value.split("(?s)\n"));
+		String separatorPart = "----";
+		@SuppressWarnings("java:S1643")
+		String separator = separatorPart;
+		while (valueLines.contains(separator)) {
+			separator = separator + separatorPart;
+		}
+		return separator;
 	}
 
 	@Override
@@ -271,8 +285,8 @@ class Util {
 		return value;
 	}
 
-	public static String[] splitArray(String arrayStr, String separator, String[] defaultResults) {
-		return arrayStr.isEmpty() ? defaultResults : arrayStr.split(Pattern.quote(separator), -1);
+	public static Optional<String[]> splitArray(String arrayStr, String separator) {
+		return arrayStr.isEmpty() ? Optional.empty() : Optional.of(arrayStr.split(Pattern.quote(separator), -1));
 	}
 
 	public static Writer openFile(String name, OpenOption... options) throws IOException {
@@ -287,8 +301,8 @@ class Util {
 		return allProps;
 	}
 
-	public static Properties selectProperties(Properties allProps, String[] selectedKeys, String file) {
-		Set<String> selectedKeysSet = new LinkedHashSet<>(List.of(selectedKeys));
+	public static Properties selectProperties(Properties allProps, List<String> selectedKeys, String file) {
+		Set<String> selectedKeysSet = new LinkedHashSet<>(selectedKeys);
 		Properties props = new Properties();
 		for (Map.Entry<String, String> entry : stringEntries(allProps)) {
 			if (selectedKeysSet.contains(entry.getKey())) {
