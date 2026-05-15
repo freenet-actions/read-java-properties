@@ -237,7 +237,11 @@ jobs:
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateAllImpl |-
         eval "$SHELL_SETUP"
-        evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion   '21'
+        #evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion   '21'
+        eval "value=\$("$RESULT_GETTER" sourceJavaVersion)"
+        printf 'value == "%s"\n' "$value"
+        assertEquals "$value" 21
+        echo '............'
         evalAndAssertEquals "$RESULT_GETTER" targetJavaVersion   '17'
         evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs  '-ea -showversion'
         evalAndAssertEquals "$RESULT_GETTER" colon:in:Key        'c'
