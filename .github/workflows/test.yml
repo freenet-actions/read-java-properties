@@ -69,7 +69,7 @@ env:
       local getterFunction=$1; shift
       local quotedArgs value st
       quotedArgs=$(printf ' %q' "$@")
-      if eval "value=\$(${getterFunction}${quotedArgs}"; then
+      if eval "value=\$(${getterFunction}${quotedArgs})"; then
         printf 'assertion error: %s == "%s", expected undefined\n' "$*" "$value" >&2
         return 1
       elif [ ${st-$?} -eq "$NOT_FOUND_STATUS" ]; then
