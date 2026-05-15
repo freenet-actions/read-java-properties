@@ -8,8 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.AbstractMap;
-import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -29,8 +28,9 @@ public class Action {
 			ResultWriter resultWriter = ResultWriter.of(config.resultType());
 			for (String file : args) {
 				Properties properties = Util.readProperties(file);
-				Properties selectedProperties = config.selectedKeys().map(keys -> Util.selectProperties(properties, keys, file))
-				        .orElse(properties);
+				Map<String, String> selectedProperties = config.selectedKeys()
+				        .map(keys -> Util.selectProperties(properties, keys, file)) //
+				        .orElseGet(() -> Util.stringEntries(properties));
 				resultWriter.write(selectedProperties, config);
 			}
 		} catch (OutputException e) {
@@ -155,17 +155,15 @@ record Config(Optional<List<String>> selectedKeys, String keySeparator, String r
 enum ResultWriter {
 	OUTPUT(Ids.ResultWriterName.OUTPUT) {
 		@Override
-		public void write(Properties props, Config config) throws IOException {
+		public void write(Map<String, String> props, Config config) throws IOException {
 			String lastValue = null;
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
-				for (Map.Entry<String, String> entry : Util.stringEntries(props)) {
+				for (Map.Entry<String, String> entry : props.entrySet()) {
 					String key = encodeKey(config, config.outputPrefix() + entry.getKey());
 					lastValue = entry.getValue();
 					writer.write(key, lastValue);
 				}
 
-				// TODO props must be in order of config.selectedKeys()
-				// Otherwise, this is arbitrary:
 				if (config.selectedKeys().isPresent() && lastValue != null) {
 					writer.write(Ids.OutputName.VALUE, lastValue);
 				}
@@ -184,22 +182,22 @@ enum ResultWriter {
 	},
 	OUTPUT_NAMED(Ids.ResultWriterName.OUTPUT_NAMED) {
 		@Override
-		public void write(Properties props, Config config) throws IOException {
+		public void write(Map<String, String> props, Config config) throws IOException {
 			writeNamedImpl(props, config, GitHubOutputFile.OUTPUT);
 		}
 	},
 	ENV_NAMED(Ids.ResultWriterName.ENV_NAMED) {
 		@Override
-		public void write(Properties props, Config config) throws IOException {
+		public void write(Map<String, String> props, Config config) throws IOException {
 			writeNamedImpl(props, config, GitHubOutputFile.ENV);
 		}
 	},
 	ENV(Ids.ResultWriterName.ENV) {
 		@Override
-		public void write(Properties props, Config config) throws IOException {
+		public void write(Map<String, String> props, Config config) throws IOException {
 			String prefix = config.resultTypeArg();
 			try (GitHubVariableWriter writer = GitHubOutputFile.ENV.open()) {
-				for (Map.Entry<String, String> entry : Util.stringEntries(props)) {
+				for (Map.Entry<String, String> entry : props.entrySet()) {
 					writer.write(prefix + entry.getKey(), entry.getValue());
 				}
 			}
@@ -207,7 +205,7 @@ enum ResultWriter {
 	},
 	JSON(Ids.ResultWriterName.JSON) {
 		@Override
-		public void write(Properties props, Config config) throws IOException {
+		public void write(Map<String, String> props, Config config) throws IOException {
 			config.requireNoArg();
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
 				writer.write(Ids.OutputName.JSON, Util.toJson(props));
@@ -216,7 +214,7 @@ enum ResultWriter {
 	},
 	JSON_FILE(Ids.ResultWriterName.JSON_FILE) {
 		@Override
-		public void write(Properties props, Config config) throws IOException {
+		public void write(Map<String, String> props, Config config) throws IOException {
 			String outputFile = config.requiredResultTypeArg();
 			Files.createDirectories((Paths.get(outputFile).getParent()));
 			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
@@ -244,9 +242,10 @@ enum ResultWriter {
 		throw OutputException.forIllegalArgument("invalid " + Ids.ConfigVariable.RESULT_TYPE + ": " + externalName);
 	}
 
-	public abstract void write(Properties props, Config config) throws IOException;
+	public abstract void write(Map<String, String> props, Config config) throws IOException;
 
-	private static void writeNamedImpl(Properties props, Config config, GitHubOutputFile gitHubOutputFile) throws IOException {
+	private static void writeNamedImpl(Map<String, String> props, Config config, GitHubOutputFile gitHubOutputFile)
+	        throws IOException {
 		List<String> selectedKeys = config.selectedKeys().orElseThrow(() -> OutputException.forIllegalArgument("invalid use of "
 		        + Ids.ConfigVariable.RESULT_TYPE + " " + config.resultType() + " (missing " + Ids.ConfigVariable.KEYS + ")"));
 
@@ -260,7 +259,7 @@ enum ResultWriter {
 		try (GitHubVariableWriter writer = gitHubOutputFile.open()) {
 			for (int i = 0; i < selectedKeys.size(); i++) {
 				String name = resultNames[resultNames.length == 1 ? 0 : i];
-				String value = props.getProperty(selectedKeys.get(i));
+				String value = props.get(selectedKeys.get(i));
 				writer.write(name, value);
 			}
 		}
@@ -385,42 +384,34 @@ class Util {
 		return allProps;
 	}
 
-	public static Properties selectProperties(Properties allProps, List<String> selectedKeys, String file) {
-		Set<String> selectedKeysSet = new LinkedHashSet<>(selectedKeys);
-		Properties props = new Properties();
-		for (Map.Entry<String, String> entry : stringEntries(allProps)) {
-			if (selectedKeysSet.contains(entry.getKey())) {
-				selectedKeysSet.remove(entry.getKey());
-				props.setProperty(entry.getKey(), entry.getValue());
+	public static Map<String, String> selectProperties(Properties allProps, List<String> selectedKeys, String file) {
+		Set<String> unmatchedKeysSet = new LinkedHashSet<>(selectedKeys);
+		Map<String, String> results = new LinkedHashMap<>();
+		for (String key : selectedKeys) {
+			String value = allProps.getProperty(key);
+			if (value != null) {
+				results.put(key, value);
+				unmatchedKeysSet.remove(key);
 			}
 		}
-		for (String key : selectedKeysSet) {
+		for (String key : unmatchedKeysSet) {
 			System.err.format("Property %s not found in %s%n", key, file);
 		}
-		return props;
+		return results;
 	}
 
-	public static Iterable<Map.Entry<String, String>> stringEntries(Properties props) {
-		return () -> new Iterator<>() {
-			private final Iterator<String> keysIter = props.stringPropertyNames().iterator();
-
-			@Override
-			public Map.Entry<String, String> next() {
-				String key = keysIter.next();
-				return new AbstractMap.SimpleImmutableEntry<>(key, props.getProperty(key));
-			}
-
-			@Override
-			public boolean hasNext() {
-				return keysIter.hasNext();
-			}
-		};
+	public static Map<String, String> stringEntries(Properties props) {
+		Map<String, String> map = new LinkedHashMap<>();
+		for (String key : props.stringPropertyNames()) {
+			map.put(key, props.getProperty(key));
+		}
+		return map;
 	}
 
-	public static String toJson(Properties props) {
+	public static String toJson(Map<String, String> map) {
 		StringBuilder s = new StringBuilder(50).append('{');
 		int initialLength = s.length();
-		for (Map.Entry<String, String> entry : stringEntries(props)) {
+		for (Map.Entry<String, String> entry : map.entrySet()) {
 			s.append(s.length() == initialLength ? '"' : ", \"");
 			appendJsonString(s, entry.getKey());
 			s.append("\":\"");
