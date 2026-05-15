@@ -5,7 +5,6 @@ defaults:
     shell: bash
 env:
   ENV_VAR_PREFIX: PROP_TEST__
-  JSON_OUTPUT_FILE: tmp/out.json
   SELECTED_SINGLE_KEY: 'org.gradle.jvmargs'
   SELECTED_KEYS: 'sourceJavaVersion org.gradle.jvmargs unicode_escapes colon:in:Key'
   SELECTED_SINGLE_NAME: 'my-prop'
@@ -72,7 +71,8 @@ env:
     # The following helper functions to get a value for a given property key from the result have a uniform
     # API (property key as sole argument) so that the actual test code can be identical (and thereby reusable
     # with YAML anchors) for different result types. This leads to some assumptions which might seem
-    # a little odd, like the JSON result file must be called $JSON_OUTPUT_FILE.
+    # a little odd, like variable JSON_OUTPUT_FILE must contain the name of the JSON result instead of passing
+    # that name as an argument.
 
     # Expects JSON as stdin and extracts the value for key $1.
     getJsonValue() {
@@ -133,20 +133,20 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     ############################################################
-    - name: 'test (should fail): invalid input: resultType'
+    - name: '[act] test (should fail): invalid input: resultType'
       id: error-input-resultType
       continue-on-error: true
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: rt1
-    - name: 'validate "test (should fail): invalid input: resultType"'
+    - name: '[assert] test (should fail): invalid input: resultType'
       run: |-
         eval "$SHELL_SETUP"
         assertEquals '${{steps.error-input-resultType.outcome}}' failure
 
     ############################################################
-    - name: 'test (should fail): resultType "output-named" without names'
+    - name: '[act] test (should fail): resultType "output-named" without names'
       id: error-resultType-output-without-names
       continue-on-error: true
       uses: ./
@@ -154,13 +154,13 @@ jobs:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'output-named:'
-    - name: 'validate "test (should fail): resultType "output-named" without names"'
+    - name: '[assert] test (should fail): resultType "output-named" without names'
       run: |-
         eval "$SHELL_SETUP"
         assertEquals '${{steps.error-resultType-output-without-names.outcome}}' failure
 
     ############################################################
-    - name: 'test (should fail): resultType "env-named" without names'
+    - name: '[act] test (should fail): resultType "env-named" without names'
       id: error-resultType-env-without-names
       continue-on-error: true
       uses: ./
@@ -168,33 +168,33 @@ jobs:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'env-named:'
-    - name: 'validate "test (should fail): resultType "env-named" without names"'
+    - name: '[assert] test (should fail): resultType "env-named" without names'
       run: |-
         eval "$SHELL_SETUP"
         assertEquals '${{steps.error-resultType-env-without-names.outcome}}' failure
 
     ############################################################
-    - name: 'test (should fail): resultType "output-named" without keys'
+    - name: '[act] test (should fail): resultType "output-named" without keys'
       id: error-resultType-output-without-keys
       continue-on-error: true
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: 'output-named:a b'
-    - name: 'validate "test (should fail): resultType "output-named" without keys"'
+    - name: '[assert] test (should fail): resultType "output-named" without keys'
       run: |-
         eval "$SHELL_SETUP"
         assertEquals '${{steps.error-resultType-output-without-keys.outcome}}' failure
 
     ############################################################
-    - name: 'test (should fail): resultType "env-named" without keys'
+    - name: '[act] test (should fail): resultType "env-named" without keys'
       id: error-resultType-env-without-keys
       continue-on-error: true
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: 'env-named:a b'
-    - name: 'validate "test (should fail): resultType "env-named" without keys"'
+    - name: '[assert] test (should fail): resultType "env-named" without keys'
       run: |-
         eval "$SHELL_SETUP"
         assertEquals '${{steps.error-resultType-env-without-keys.outcome}}' failure
@@ -203,13 +203,13 @@ jobs:
     # This tests a subset of test case multi-output, but with hard-coded encoding from property key to output
     # name (instead of re-implemented).
     # It also demonstrates how you'd usually use outputs with one environment variable per output.
-    - name: 'test: query multiple properties as action outputs (simple)'
+    - name: '[act] test: query multiple properties as action outputs (simple)'
       id: multi-output-simple
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}} dash-in-Key'
-    - name: 'validate "test: query multiple properties as action outputs (simple)"'
+    - name: '[assert] test: query multiple properties as action outputs (simple)'
       env:
         RESULT_SJV:     ${{steps.multi-output-simple.outputs._sourceJavaVersion}}
         RESULT_JVMARGS: ${{steps.multi-output-simple.outputs._org-002Egradle-002Ejvmargs}}
@@ -225,12 +225,12 @@ jobs:
         assertEquals "$RESULT_UNI"     'a«,»c'
 
     ############################################################
-    - name: 'test: query all properties as action outputs'
+    - name: '[act] test: query all properties as action outputs'
       id: all-output
       uses: ./
       with:
         file: test/resources/test.properties
-    - name: 'validate "test: query all properties as action outputs"'
+    - name: '[assert] test: query all properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.all-output.outputs)}}
         RESULT_GETTER: encodeKeyAndGetEnvJsonValue
@@ -265,13 +265,13 @@ jobs:
         getAndAssertEquals "$RESULT_GETTER" dash_3_4_8_1        $'---\n----\n--------\n-'
 
     ############################################################
-    - name: 'test: query multiple properties as action outputs'
+    - name: '[act] test: query multiple properties as action outputs'
       id: multi-output
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
-    - name: 'validate "test: query multiple properties as action outputs"'
+    - name: '[assert] test: query multiple properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output.outputs)}}
         RESULT_GETTER: encodeKeyAndGetEnvJsonValue
@@ -307,14 +307,14 @@ jobs:
         getAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
 
     ############################################################
-    - name: 'test: query multiple properties as action outputs of given names'
+    - name: '[act] test: query multiple properties as action outputs of given names'
       id: multi-output-named
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'output-named:${{env.SELECTED_NAMES}}'
-    - name: 'validate "test: query multiple properties as action outputs of given names"'
+    - name: '[assert] test: query multiple properties as action outputs of given names'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output-named.outputs)}}
         # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
@@ -337,14 +337,14 @@ jobs:
         getAndAssertUndefined "$RESULT_GETTER" dash_1
 
     ############################################################
-    - name: 'test: query multiple properties as action outputs of given name'
+    - name: '[act] test: query multiple properties as action outputs of given name'
       id: multi-output-named1
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'output-named:${{env.SELECTED_SINGLE_NAME}}'
-    - name: 'validate "test: query multiple properties as action outputs of given name"'
+    - name: '[assert] test: query multiple properties as action outputs of given name'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output-named1.outputs)}}
         # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
@@ -364,13 +364,13 @@ jobs:
         getAndAssertUndefined "$RESULT_GETTER" dash_1
 
     ############################################################
-    - name: 'test: query single property as action outputs'
+    - name: '[act] test: query single property as action outputs'
       id: single-output
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_SINGLE_KEY}}'
-    - name: 'validate "test: query multiple properties as action outputs"'
+    - name: '[assert] test: query multiple properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.single-output.outputs)}}
         RESULT_GETTER: encodeKeyAndGetEnvJsonValue
@@ -406,54 +406,90 @@ jobs:
         getAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
 
     ############################################################
-    - name: 'test: query all properties as JSON action output'
+    - name: '[act] test: query all properties as JSON action output'
       id: all-json
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: json
-    - name: 'validate "test: query all properties as JSON action output"'
+    - name: '[assert] test: query all properties as JSON action output'
       env:
         RESULT_JSON: ${{steps.all-json.outputs.json}}
         RESULT_GETTER: getEnvJsonValue
       run: *validateAllImpl
 
     ############################################################
-    - name: 'test: query multiple properties as JSON action output'
+    - name: '[act] test: query multiple properties as JSON action output'
       id: multiple-json
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: json
-    - name: 'validate "test: query multiple properties as JSON action output"'
+    - name: '[assert] test: query multiple properties as JSON action output'
       env:
         RESULT_JSON: ${{steps.multiple-json.outputs.json}}
         RESULT_GETTER: getEnvJsonValue
       run: *validateMultiImpl
 
     ############################################################
-    - name: 'test: query all properties as JSON file'
-      uses: ./
-      with:
-        file: test/resources/test.properties
-        resultType: 'json-file:${{env.JSON_OUTPUT_FILE}}'
-    - name: 'validate "test: query all properties as JSON file"'
-      env:
-        RESULT_GETTER: getFileJsonValue
-      run: *validateAllImpl
-
-    ############################################################
-    - name: 'test: query multiple properties as JSON file'
+    - name: '[arrange] test: query multiple properties as JSON file (creating file)'
+      id: multiple-json-file-create-arrange
+      run: |-
+        dir=$(mktemp --directory --dry-run --tmpdir test_json-file_multi_create_XXXXXX)
+        printf 'file=%s/out/result.json\n' "$dir" | tee -- "$GITHUB_OUTPUT"
+        # ⇒ action must create two parent dirs: $dir, $dir/out
+    - name: '[act] test: query multiple properties as JSON file (creating file)'
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
-        resultType: 'json-file:${{env.JSON_OUTPUT_FILE}}'
-    - name: 'validate "test: query multiple properties as JSON file"'
+        resultType: 'json-file:${{steps.multiple-json-file-create-arrange.outputs.file}}'
+    - name: '[assert] test: query multiple properties as JSON file (creating file)'
       env:
+        JSON_OUTPUT_FILE: ${{steps.multiple-json-file-create-arrange.outputs.file}}
         RESULT_GETTER: getFileJsonValue
       run: *validateMultiImpl
+
+    ############################################################
+    - name: '[arrange] test: query multiple properties as JSON file (overwriting file)'
+      id: multiple-json-file-overwrite-arrange
+      run: |-
+        file=$(mktemp --tmpdir test_json-file_multi_overwrite_XXXXXX.json)
+        # Write longer contents than the expected output. ⇒ If the action does not truncate, there will be
+        # non-parseable remains and parsing in function getFileJsonValue will fail.
+        for ((i=0; i<100; i++)); do printf 'This is ¬ JS}ON. '; done >"$file"
+        ls -lAF -- "$file"
+        printf 'file=%s\n' "$file" | tee -- "$GITHUB_OUTPUT"
+    - name: '[act] test: query multiple properties as JSON file (overwriting file)'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'json-file:${{steps.multiple-json-file-overwrite-arrange.outputs.file}}'
+    - name: '[assert] test: query multiple properties as JSON file (overwriting file)'
+      env:
+        JSON_OUTPUT_FILE: ${{steps.multiple-json-file-overwrite-arrange.outputs.file}}
+        RESULT_GETTER: getFileJsonValue
+      run: *validateMultiImpl
+
+    ############################################################
+    - name: '[arrange] test: query all properties as JSON file'
+      id: all-json-file-arrange
+      # Distinction between creating and overwriting need not be tested again.
+      # This test just uses an existing empty file.
+      run: |-
+        printf 'file=%s\n' "$(mktemp --tmpdir test_json-file_all_XXXXXX.json)" | tee -- "$GITHUB_OUTPUT"
+    - name: '[act] test: query all properties as JSON file'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: 'json-file:${{steps.all-json-file-arrange.outputs.file}}'
+    - name: '[assert] test: query all properties as JSON file'
+      env:
+        JSON_OUTPUT_FILE: ${{steps.all-json-file-arrange.outputs.file}}
+        RESULT_GETTER: getFileJsonValue
+      run: *validateAllImpl
 
 
   # Each test which sets environment variables is a separate job to be independant of other tests.
@@ -462,12 +498,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    - name: 'test: query all properties as environment variables'
+    - name: '[act] test: query all properties as environment variables'
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: env
-    - name: 'validate "test: query all properties as environment variables"'
+    - name: '[assert] test: query all properties as environment variables'
       env:
         RESULT_GETTER: getEnv
       run: *validateAllImpl
@@ -477,13 +513,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    - name: 'test: query multiple properties as environment variables'
+    - name: '[act] test: query multiple properties as environment variables'
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: env
-    - name: 'validate "test: query multiple properties as environment variables"'
+    - name: '[assert] test: query multiple properties as environment variables'
       env:
         RESULT_GETTER: getEnv
       run: *validateMultiImpl
@@ -493,13 +529,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    - name: 'test: query multiple properties as environment variables of given names'
+    - name: '[act] test: query multiple properties as environment variables of given names'
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'env-named:${{env.SELECTED_NAMES}}'
-    - name: 'validate "test: query multiple properties as environment variables of given names"'
+    - name: '[assert] test: query multiple properties as environment variables of given names'
       env:
         RESULT_GETTER: getEnv
       run: *validateMultiNamedImpl
@@ -509,13 +545,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    - name: 'test: query multiple properties as environment variables of given names'
+    - name: '[act] test: query multiple properties as environment variables of given names'
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'env-named:${{env.SELECTED_SINGLE_NAME}}'
-    - name: 'validate "test: query multiple properties as environment variables of given names"'
+    - name: '[assert] test: query multiple properties as environment variables of given names'
       env:
         RESULT_GETTER: getEnv
       run: *validateMultiNamed1Impl
@@ -525,13 +561,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    - name: 'test: query single property as environment variable'
+    - name: '[act] test: query single property as environment variable'
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_SINGLE_KEY}}'
         resultType: env
-    - name: 'validate "test: query single property as environment variable"'
+    - name: '[assert] test: query single property as environment variable'
       env:
         RESULT_GETTER: getEnv
       run: *validateSingleImpl
@@ -541,12 +577,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    - name: 'test: query all properties as environment variables with prefix'
+    - name: '[act] test: query all properties as environment variables with prefix'
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: 'env:${{env.ENV_VAR_PREFIX}}'
-    - name: 'validate "test: query all properties as environment variables"'
+    - name: '[assert] test: query all properties as environment variables'
       env:
         RESULT_GETTER: getEnvWithPrefix
       run: *validateAllImpl
@@ -556,13 +592,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    - name: 'test: query multiple properties as environment variables with prefix'
+    - name: '[act] test: query multiple properties as environment variables with prefix'
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'env:${{env.ENV_VAR_PREFIX}}'
-    - name: 'validate "test: query multiple properties as environment variables with prefix"'
+    - name: '[assert] test: query multiple properties as environment variables with prefix'
       env:
         RESULT_GETTER: getEnvWithPrefix
       run: *validateMultiImpl
@@ -572,13 +608,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    - name: 'test: query single property as environment variable with prefix'
+    - name: '[act] test: query single property as environment variable with prefix'
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_SINGLE_KEY}}'
         resultType: 'env:${{env.ENV_VAR_PREFIX}}'
-    - name: 'validate "test: query single property as environment variable with prefix"'
+    - name: '[assert] test: query single property as environment variable with prefix'
       env:
         RESULT_GETTER: getEnvWithPrefix
       run: *validateSingleImpl
