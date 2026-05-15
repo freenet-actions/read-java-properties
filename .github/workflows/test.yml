@@ -6,6 +6,7 @@ defaults:
 env:
   SELECTED_SINGLE_KEY: 'org.gradle.jvmargs'
   SELECTED_KEYS: 'sourceJavaVersion org.gradle.jvmargs unicode_escapes colon:in:Key'
+  SELECTED_KEYS_OTHER_ORDER: 'colon:in:Key sourceJavaVersion org.gradle.jvmargs unicode_escapes'
   SELECTED_SINGLE_NAME: 'my-prop'
   SELECTED_NAMES: 'java-version jvm_args unicode colon'
 
@@ -285,6 +286,12 @@ jobs:
         evalAndAssertEquals "$RESULT_GETTER" dash_12             '------------'
         evalAndAssertEquals "$RESULT_GETTER" dash_3_4_1          $'---\n----\n-'
         evalAndAssertEquals "$RESULT_GETTER" dash_3_4_8_1        $'---\n----\n--------\n-'
+    - name: '[assert] test: query all properties as action outputs (additional "value" output not set)'
+      env:
+        RESULT_VALUE: ${{steps.all-output.outputs.value || 'U_N_S_E_T'}}
+      run: |-
+        eval "$SHELL_SETUP"
+        assertEquals "$RESULT_VALUE" U_N_S_E_T
 
     ############################################################
     - name: '[act] test: query multiple properties as action outputs'
@@ -293,6 +300,7 @@ jobs:
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
+
     - name: '[assert] test: query multiple properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output.outputs)}}
@@ -329,6 +337,32 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
 
+    - name: '[assert] test: query multiple properties as action outputs (additional "value" output)'
+      env:
+        RESULT_VALUE: ${{steps.multi-output.outputs.value}}
+      run: |-
+        eval "$SHELL_SETUP"
+        assertEquals "$RESULT_VALUE" 'c' # from last key "colon:in:Key"
+
+    ############################################################
+    - name: '[act] test: query multiple properties as action outputs (in another keys order)'
+      id: multi-output-2
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS_OTHER_ORDER}}'
+    - name: '[assert] test: query multiple properties as action outputs (in another keys order)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.multi-output-2.outputs)}}
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
+      run: *validateMultiImpl
+    - name: '[assert] test: query multiple properties as action outputs (in another keys order) (additional "value" output)'
+      env:
+        RESULT_VALUE: ${{steps.multi-output-2.outputs.value}}
+      run: |-
+        eval "$SHELL_SETUP"
+        assertEquals "$RESULT_VALUE" 'a«,»c' # from last key "unicode_escapes"
+
     ############################################################
     - name: '[act] test: query multiple properties as action outputs of given names'
       id: multi-output-named
@@ -337,6 +371,7 @@ jobs:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'output-named:${{env.SELECTED_NAMES}}'
+
     - name: '[assert] test: query multiple properties as action outputs of given names'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output-named.outputs)}}
@@ -359,6 +394,13 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
         evalAndAssertUndefined "$RESULT_GETTER" dash_1
 
+    - name: '[assert] test: query multiple properties as action outputs (additional "value" output not set)'
+      env:
+        RESULT_VALUE: ${{steps.multi-output-named.outputs.value || 'U_N_S_E_T'}}
+      run: |-
+        eval "$SHELL_SETUP"
+        assertEquals "$RESULT_VALUE" U_N_S_E_T
+
     ############################################################
     - name: '[act] test: query multiple properties as action outputs of given name'
       id: multi-output-named1
@@ -367,6 +409,7 @@ jobs:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'output-named:${{env.SELECTED_SINGLE_NAME}}'
+
     - name: '[assert] test: query multiple properties as action outputs of given name'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output-named1.outputs)}}
@@ -393,6 +436,7 @@ jobs:
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_SINGLE_KEY}}'
+
     - name: '[assert] test: query multiple properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.single-output.outputs)}}
