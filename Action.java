@@ -264,7 +264,7 @@ enum ResultWriter {
 			for (int i = 0; i < selectedKeys.size(); i++) {
 				String name = resultNames[resultNames.length == 1 ? 0 : i];
 				String value = props.get(selectedKeys.get(i));
-				writer.write(name, value);
+				writer.write(name, value != null ? value : "");
 			}
 		}
 	}
