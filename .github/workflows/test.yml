@@ -632,7 +632,10 @@ jobs:
       # Distinction between creating and overwriting need not be tested again.
       # This test just uses an existing empty file.
       run: |-
-        printf 'file=%s\n' "$(mktemp --tmpdir=. test_json-file_all_XXXXXX.json)" | tee -- "$GITHUB_OUTPUT"
+        # Remove leading "./" ⇒ Also test the case where given file has "no parent" (i.e. Java method
+        # java.nio.file.Path.getParent() returns null).
+        file=$(mktemp --tmpdir=. test_json-file_all_XXXXXX.json | sed 's=^\./==')
+        printf 'file=%s\n' "$file" | tee -- "$GITHUB_OUTPUT"
     - name: '[act] test: query all properties as JSON file'
       uses: ./
       with:

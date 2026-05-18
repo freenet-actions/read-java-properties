@@ -159,7 +159,7 @@ enum ResultWriter {
 			String lastValue = null;
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
 				for (Map.Entry<String, String> entry : props.entrySet()) {
-					String key = encodeKey(config, config.outputPrefix() + entry.getKey());
+					String key = encodeKey(config.outputPrefix() + entry.getKey());
 					lastValue = entry.getValue();
 					writer.write(key, lastValue);
 				}
@@ -170,8 +170,8 @@ enum ResultWriter {
 			}
 		}
 
-		private static String encodeKey(Config config, String key) {
-			StringBuilder result = new StringBuilder(key.length() + config.outputPrefix().length() + 4);
+		private static String encodeKey(String key) {
+			StringBuilder result = new StringBuilder(key.length() + 4);
 			Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(key);
 			while (matcher.find()) {
 				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
@@ -419,7 +419,7 @@ class Util {
 		for (Map.Entry<String, String> entry : map.entrySet()) {
 			s.append(s.length() == initialLength ? '"' : ", \"");
 			appendJsonString(s, entry.getKey());
-			s.append("\":\"");
+			s.append("\": \"");
 			appendJsonString(s, entry.getValue());
 			s.append('"');
 		}
