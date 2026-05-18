@@ -6,6 +6,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
@@ -216,7 +217,10 @@ enum ResultWriter {
 		@Override
 		public void write(Map<String, String> props, Config config) throws IOException {
 			String outputFile = config.requiredResultTypeArg();
-			Files.createDirectories((Paths.get(outputFile).getParent()));
+			Path parentDir = Paths.get(outputFile).getParent();
+			if (parentDir != null) {
+				Files.createDirectories(parentDir);
+			}
 			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
 				String jsonResult = Util.toJson(props);
 				System.err.format("writing JSON for %s properties to %s%n", props.size(), outputFile);
