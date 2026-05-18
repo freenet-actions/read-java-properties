@@ -123,7 +123,33 @@ env:
     }
 
 jobs:
+  # Similar to [https://github.com/orgs/community/discussions/12395#discussioncomment-12970019], this step
+  # aggregates all job states, so that we need only this job as a status check in the GitHub repository settings.
   test:
+    needs:
+    - test-misc
+    - test-all-env
+    - test-multi-env
+    - test-multi-env-named
+    - test-multi-env-named1
+    - test-single-env
+    - test-all-env-with-prefix
+    - test-multi-env-with-prefix
+    - test-single-env-with-prefix
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: check overall status
+      env:
+        JOBS_TO_CHECK_JSON: ${{toJSON(needs)}}
+      run: |-
+        printf '$JOBS_TO_CHECK_JSON == "%s"\n' "$JOBS_TO_CHECK_JSON" >&2
+        jq --raw-output '
+            [to_entries[] | select(.value.result != "success")]
+            | map((.key + " has status " + (.value.result//"null") + "\n") | halt_error(1))[]
+        ' <<<"$JOBS_TO_CHECK_JSON"
+
+  test-misc:
     runs-on: ubuntu-latest
     steps:
     - &checkoutStep
