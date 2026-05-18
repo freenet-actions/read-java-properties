@@ -219,7 +219,7 @@ enum ResultWriter {
 			Files.createDirectories((Paths.get(outputFile).getParent()));
 			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
 				String jsonResult = Util.toJson(props);
-				System.err.format("writing to %s: %s%n", outputFile, jsonResult);
+				System.err.format("writing JSON for %s properties to %s%n", props.size(), outputFile);
 				writer.write(jsonResult);
 				writer.write('\n');
 				writer.flush();
@@ -268,17 +268,19 @@ enum ResultWriter {
 
 
 enum GitHubOutputFile {
-	OUTPUT("GITHUB_OUTPUT"), //
-	ENV("GITHUB_ENV");
+	OUTPUT("GITHUB_OUTPUT", "output"), //
+	ENV("GITHUB_ENV", "environment variable");
 
-	final String fileName;
+	private final String fileName;
+	private final String description;
 
-	private GitHubOutputFile(String fileNameEnvVar) {
+	private GitHubOutputFile(String fileNameEnvVar, String description) {
 		this.fileName = Util.getRequiredEnv(fileNameEnvVar);
+		this.description = description;
 	}
 
 	public GitHubVariableWriter open() throws IOException {
-		return new GitHubVariableWriter(this.toString().replaceFirst("^GITHUB_", "").toLowerCase(), fileName);
+		return new GitHubVariableWriter(description, fileName);
 	}
 }
 
@@ -295,7 +297,7 @@ class GitHubVariableWriter implements AutoCloseable {
 	}
 
 	public void write(String key, String value) throws IOException {
-		System.err.format("%s %s\t:= \"%s\"%n", description, key, value);
+		System.err.format("setting %s %s%n", description, key);
 
 		// write (very) simple values in format "<key>=<value>":
 		if (SIMPLE_VALUE.matcher(value).matches()) {
