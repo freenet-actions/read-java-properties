@@ -384,6 +384,9 @@ class Util {
 		return allProps;
 	}
 
+	/**
+	 * Selects the properties with the given keys and returns them as a Map with the corresponding iteration order.
+	 */
 	public static Map<String, String> selectProperties(Properties allProps, List<String> selectedKeys, String file) {
 		Set<String> unmatchedKeysSet = new LinkedHashSet<>(selectedKeys);
 		Map<String, String> results = new LinkedHashMap<>();

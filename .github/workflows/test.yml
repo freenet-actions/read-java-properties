@@ -345,6 +345,34 @@ jobs:
         assertEquals "$RESULT_VALUE" 'c' # from last key "colon:in:Key"
 
     ############################################################
+    - name: '[act] test: query multiple properties as action outputs (different keySeparator)'
+      id: multi-output-keySeparator
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keySeparator: '?' # something with a special meaning in regex; should be treated as literal
+        keys: 'sourceJavaVersion?org.gradle.jvmargs?unicode_escapes?colon:in:Key'
+    - name: '[assert] test: query multiple properties as action outputs (different keySeparator)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.multi-output-keySeparator.outputs)}}
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
+      run: *validateMultiImpl
+
+    ############################################################
+    - name: '[act] test: query multiple properties as action outputs (different multi-char keySeparator)'
+      id: multi-output-keySeparatorMC
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keySeparator: ':/ '
+        keys: 'sourceJavaVersion:/ org.gradle.jvmargs:/ unicode_escapes:/ colon:in:Key'
+    - name: '[assert] test: query multiple properties as action outputs (different multi-char keySeparator)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.multi-output-keySeparatorMC.outputs)}}
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
+      run: *validateMultiImpl
+
+    ############################################################
     - name: '[act] test: query multiple properties as action outputs (in another keys order)'
       id: multi-output-2
       uses: ./
@@ -400,6 +428,36 @@ jobs:
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" U_N_S_E_T
+
+    ############################################################
+    - name: '[act] test: query multiple properties as action outputs of given names (different resultNameSeparator)'
+      id: multi-output-named-resultNameSeparator
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultNameSeparator: '?' # something with a special meaning in regex; should be treated as literal
+        resultType: 'output-named:java-version?jvm_args?unicode?colon'
+    - name: '[assert] test: query multiple properties as action outputs of given names (different resultNameSeparator)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.multi-output-named-resultNameSeparator.outputs)}}
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: *validateMultiNamedImpl
+
+    ############################################################
+    - name: '[act] test: query multiple properties as action outputs of given names (different multi-char resultNameSeparator)'
+      id: multi-output-named-resultNameSeparatorMC
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultNameSeparator: '- -'
+        resultType: 'output-named:java-version- -jvm_args- -unicode- -colon'
+    - name: '[assert] test: query multiple properties as action outputs of given names (different multi-char resultNameSeparator)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.multi-output-named-resultNameSeparatorMC.outputs)}}
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: *validateMultiNamedImpl
 
     ############################################################
     - name: '[act] test: query multiple properties as action outputs of given name'
