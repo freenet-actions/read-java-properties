@@ -722,7 +722,7 @@ jobs:
         resultType: env
     - name: '[assert] test: query single property as environment variable'
       env:
-        RESULT_GETTER: getEnv
+        RESULT_GETTER: getEnvXXXXXXXXXXXXX
       run: *validateSingleImpl
 
   ############################################################
