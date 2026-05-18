@@ -143,7 +143,7 @@ jobs:
       env:
         JOBS_TO_CHECK_JSON: ${{toJSON(needs)}}
       run: |-
-        printf '$JOBS_TO_CHECK_JSON pretty-printed: %s\n' "$(jq --tab <<<"$JOBS_TO_CHECK_JSON")"
+        printf '$JOBS_TO_CHECK_JSON == "%s"\n' "$JOBS_TO_CHECK_JSON" >&2
         jq --raw-output '
             [to_entries[] | select(.value.result != "success")]
             | map((.key + " has status " + (.value.result//"null") + "\n") | halt_error(1))[]
