@@ -1,6 +1,6 @@
 # read-java-properties
 
-Github Action to read a Java .properties file and output one, multiple, or all properties as plain strings or JSON.
+GitHub Action to read a Java .properties file and output one, multiple, or all properties as plain strings or JSON.
 
 ## Usage example:
 
@@ -61,7 +61,7 @@ Query a single property as action output:
     keys: org.gradle.jvmargs
 ```
 ⇒ \
-  `${{steps.readProp.outputs.org.gradle.jvmargs}}` == `-ea -showversion`, \
+  `${{steps.readProp.outputs.org-002Egradle-002Ejvmargs}}` == `-ea -showversion`, \
   `${{steps.readProp.outputs.value}}` == `-ea -showversion`.
 
 Query multiple (alternative) properties as a single action output. In other words, query a property with a fallback to another property.

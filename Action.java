@@ -6,6 +6,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
@@ -159,7 +160,7 @@ enum ResultWriter {
 			String lastValue = null;
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
 				for (Map.Entry<String, String> entry : props.entrySet()) {
-					String key = encodeKey(config, config.outputPrefix() + entry.getKey());
+					String key = encodeKey(config.outputPrefix() + entry.getKey());
 					lastValue = entry.getValue();
 					writer.write(key, lastValue);
 				}
@@ -170,8 +171,8 @@ enum ResultWriter {
 			}
 		}
 
-		private static String encodeKey(Config config, String key) {
-			StringBuilder result = new StringBuilder(key.length() + config.outputPrefix().length() + 4);
+		private static String encodeKey(String key) {
+			StringBuilder result = new StringBuilder(key.length() + 4);
 			Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(key);
 			while (matcher.find()) {
 				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
@@ -216,7 +217,10 @@ enum ResultWriter {
 		@Override
 		public void write(Map<String, String> props, Config config) throws IOException {
 			String outputFile = config.requiredResultTypeArg();
-			Files.createDirectories((Paths.get(outputFile).getParent()));
+			Path parentDir = Paths.get(outputFile).getParent();
+			if (parentDir != null) {
+				Files.createDirectories(parentDir);
+			}
 			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
 				String jsonResult = Util.toJson(props);
 				System.err.format("writing JSON for %s properties to %s%n", props.size(), outputFile);
@@ -260,7 +264,7 @@ enum ResultWriter {
 			for (int i = 0; i < selectedKeys.size(); i++) {
 				String name = resultNames[resultNames.length == 1 ? 0 : i];
 				String value = props.get(selectedKeys.get(i));
-				writer.write(name, value);
+				writer.write(name, value != null ? value : "");
 			}
 		}
 	}
@@ -419,7 +423,7 @@ class Util {
 		for (Map.Entry<String, String> entry : map.entrySet()) {
 			s.append(s.length() == initialLength ? '"' : ", \"");
 			appendJsonString(s, entry.getKey());
-			s.append("\":\"");
+			s.append("\": \"");
 			appendJsonString(s, entry.getValue());
 			s.append('"');
 		}
@@ -430,6 +434,8 @@ class Util {
 		for (char c : s.toCharArray()) {
 			if (c == ' ') {
 				buffer.append(c);
+			} else if (c == '\\') {
+				buffer.append('\\').append('\\');
 			} else if (c == '"') {
 				buffer.append('\\').append('"');
 			} else if (c == '\t') {

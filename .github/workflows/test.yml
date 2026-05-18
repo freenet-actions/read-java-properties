@@ -290,6 +290,7 @@ jobs:
         evalAndAssertEquals "$RESULT_GETTER" 'space in Key'      'sp'
         evalAndAssertEquals "$RESULT_GETTER" colon:in:Key        'c'
         evalAndAssertEquals "$RESULT_GETTER" colonInValue        'cv:'
+        evalAndAssertEquals "$RESULT_GETTER" 'back\slash'        'back\slash\value'
         evalAndAssertEquals "$RESULT_GETTER" dash-in-Key         'd'
         evalAndAssertEquals "$RESULT_GETTER" dashInValue         'd-'
         evalAndAssertEquals "$RESULT_GETTER" empty               ''
@@ -341,6 +342,7 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
         evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" 'back\slash'
         evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
         evalAndAssertUndefined "$RESULT_GETTER" dashInValue
         evalAndAssertUndefined "$RESULT_GETTER" empty
@@ -534,6 +536,7 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
         evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" 'back\slash'
         evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
         evalAndAssertUndefined "$RESULT_GETTER" dashInValue
         evalAndAssertUndefined "$RESULT_GETTER" empty
@@ -632,7 +635,10 @@ jobs:
       # Distinction between creating and overwriting need not be tested again.
       # This test just uses an existing empty file.
       run: |-
-        printf 'file=%s\n' "$(mktemp --tmpdir=. test_json-file_all_XXXXXX.json)" | tee -- "$GITHUB_OUTPUT"
+        # Remove leading "./" ⇒ Also test the case where given file has "no parent" (i.e. Java method
+        # java.nio.file.Path.getParent() returns null).
+        file=$(mktemp --tmpdir=. test_json-file_all_XXXXXX.json | sed 's=^\./==')
+        printf 'file=%s\n' "$file" | tee -- "$GITHUB_OUTPUT"
     - name: '[act] test: query all properties as JSON file'
       uses: ./
       with:
