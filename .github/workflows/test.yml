@@ -437,7 +437,7 @@ jobs:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultNameSeparator: '?' # something with a special meaning in regex; should be treated as literal
-        resultType: 'java-version?jvm_args?unicode?colon'
+        resultType: 'output-named:java-version?jvm_args?unicode?colon'
     - name: '[assert] test: query multiple properties as action outputs of given names (different resultNameSeparator)'
       env:
         RESULT_JSON: ${{toJSON(steps.multi-output-named-resultNameSeparator.outputs)}}
