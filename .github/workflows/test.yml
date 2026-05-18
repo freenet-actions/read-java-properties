@@ -290,6 +290,7 @@ jobs:
         evalAndAssertEquals "$RESULT_GETTER" 'space in Key'      'sp'
         evalAndAssertEquals "$RESULT_GETTER" colon:in:Key        'c'
         evalAndAssertEquals "$RESULT_GETTER" colonInValue        'cv:'
+        evalAndAssertEquals "$RESULT_GETTER" 'back\slash'        'back\slash\value'
         evalAndAssertEquals "$RESULT_GETTER" dash-in-Key         'd'
         evalAndAssertEquals "$RESULT_GETTER" dashInValue         'd-'
         evalAndAssertEquals "$RESULT_GETTER" empty               ''
@@ -341,6 +342,7 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
         evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" 'back\slash'
         evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
         evalAndAssertUndefined "$RESULT_GETTER" dashInValue
         evalAndAssertUndefined "$RESULT_GETTER" empty
@@ -534,6 +536,7 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
         evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" 'back\slash'
         evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
         evalAndAssertUndefined "$RESULT_GETTER" dashInValue
         evalAndAssertUndefined "$RESULT_GETTER" empty
