@@ -268,16 +268,15 @@ enum ResultWriter {
 
 
 enum GitHubOutputFile {
-	OUTPUT("output"), //
-	ENV("environment variable");
+	OUTPUT("GITHUB_OUTPUT", "output"), //
+	ENV("GITHUB_ENV", "environment variable");
 
-	private final String description;
 	private final String fileName;
+	private final String description;
 
-	private GitHubOutputFile(String description) {
-		this.description = description;
-		String fileNameEnvVar = "GITHUB_" + name();
+	private GitHubOutputFile(String fileNameEnvVar, String description) {
 		this.fileName = Util.getRequiredEnv(fileNameEnvVar);
+		this.description = description;
 	}
 
 	public GitHubVariableWriter open() throws IOException {
