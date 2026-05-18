@@ -434,6 +434,8 @@ class Util {
 		for (char c : s.toCharArray()) {
 			if (c == ' ') {
 				buffer.append(c);
+			} else if (c == '\\') {
+				buffer.append('\\').append('\\');
 			} else if (c == '"') {
 				buffer.append('\\').append('"');
 			} else if (c == '\t') {
