@@ -762,7 +762,7 @@ jobs:
         resultType: json
     - name: '[assert] query multiple missing properties as JSON action output'
       env:
-        RESULT_JSON: ${{toJSON(steps.json_multi_missing.outputs.json)}}
+        RESULT_JSON: ${{steps.json_multi_missing.outputs.json}}
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: &validateMultiMissingJsonImpl |-
         eval "$SHELL_SETUP"
