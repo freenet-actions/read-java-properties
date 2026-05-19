@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -227,7 +228,7 @@ enum ResultWriter {
 		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
 			config.requireNoArg();
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
-				writer.write(Ids.OutputName.JSON, Util.toJson(props));
+				writer.write(Ids.OutputName.JSON, Util.toJson(props).s());
 			}
 		}
 	},
@@ -240,9 +241,9 @@ enum ResultWriter {
 				Files.createDirectories(parentDir);
 			}
 			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-				String jsonResult = Util.toJson(props);
-				System.err.format("writing JSON for %s properties to %s%n", props.size(), outputFile);
-				writer.write(jsonResult);
+				StringIntPair jsonResult = Util.toJson(props);
+				System.err.format("writing JSON for %s properties to %s%n", jsonResult.i(), outputFile);
+				writer.write(jsonResult.s());
 				writer.write('\n');
 				writer.flush();
 			}
@@ -448,20 +449,29 @@ class Util {
 		return map;
 	}
 
-	public static String toJson(Map<String, Optional<String>> map) {
+	/**
+	 * @return the JSON string and the number of entries with non-empty value
+	 */
+	public static StringIntPair toJson(Map<String, Optional<String>> map) {
+		AtomicInteger size = new AtomicInteger(0);
 		StringBuilder s = new StringBuilder(50).append('{');
 		int initialLength = s.length();
 		for (Map.Entry<String, Optional<String>> entry : map.entrySet()) {
-			s.append(s.length() == initialLength ? '"' : ", \"");
+			if (s.length() != initialLength) {
+				s.append(", ");
+			}
+			s.append('"');
 			appendJsonString(s, entry.getKey());
 			s.append("\": ");
 			entry.getValue().ifPresentOrElse(value -> {
+				size.incrementAndGet();
 				s.append('"');
 				appendJsonString(s, value);
 				s.append('"');
 			}, () -> s.append("null"));
 		}
-		return s.append('}').toString();
+		s.append('}');
+		return new StringIntPair(s.toString(), size.get());
 	}
 
 	private static void appendJsonString(StringBuilder buffer, String s) {
@@ -489,4 +499,8 @@ class Util {
 			}
 		}
 	}
+}
+
+
+record StringIntPair(String s, int i) {
 }
