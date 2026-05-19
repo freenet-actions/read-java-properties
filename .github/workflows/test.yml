@@ -853,7 +853,7 @@ jobs:
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_KEYS}} ${{env.SELECTED_NON_EX_KEY2}}'
-        resultType: json
+        resultType: 'json-file:${{steps.json-file_multi_missing_arrange.outputs.file}}'
     - name: '[assert] query multiple missing properties as JSON file'
       env:
         JSON_OUTPUT_FILE: ${{steps.json-file_multi_missing_arrange.outputs.file}}
