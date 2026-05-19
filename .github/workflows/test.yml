@@ -127,7 +127,9 @@ jobs:
   # aggregates all job states, so that we need only this job as a status check in the GitHub repository settings.
   test:
     needs:
-    - test-misc
+    - test-invalid-usage
+    - test-output
+    - test-json
     - test-all-env
     - test-multi-env
     - test-multi-env-named
@@ -149,7 +151,7 @@ jobs:
             | map((.key + " has status " + (.value.result//"null") + "\n") | halt_error(1))[]
         ' <<<"$JOBS_TO_CHECK_JSON"
 
-  test-misc:
+  test-invalid-usage:
     runs-on: ubuntu-latest
     steps:
     - &checkoutStep
@@ -247,6 +249,10 @@ jobs:
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid use of resultType env-named (missing keys)'
 
+  test-output:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
     ############################################################
     # This tests a subset of test case multi-output, but with hard-coded encoding from property key to output
     # name (instead of re-implemented).
@@ -503,7 +509,7 @@ jobs:
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: &validateMultiNamed1Impl |-
         eval "$SHELL_SETUP"
-        evalAndAssertEquals "$RESULT_GETTER" my-prop 'c'
+        evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_SINGLE_NAME" 'c'
 
         # The outputs with the default names are not set:
         evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
@@ -560,6 +566,10 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
 
+  test-json:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
     ############################################################
     - name: '[act] test: query all properties as JSON action output'
       id: all-json
