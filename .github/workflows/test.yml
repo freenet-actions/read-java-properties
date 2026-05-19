@@ -487,7 +487,7 @@ jobs:
         eval "$SHELL_SETUP"
         evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_KEY" '21'
 
-        evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
         evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
         evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
         evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
