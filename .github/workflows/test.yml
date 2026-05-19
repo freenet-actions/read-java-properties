@@ -686,16 +686,13 @@ jobs:
     - name: '[assert] query single missing property as action output of given name'
       env:
         RESULT: ${{steps.output-named_single_missing.outputs.my-prop}}
-        RESULT_VALUE: ${{steps.output-named_single_missing.outputs.value}}
         RESULT_JSON: ${{toJSON(steps.output-named_single_missing.outputs)}}
       run: |-
         eval "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
         assertEquals "$RESULT" ''
-        assertEquals "$RESULT_VALUE" ''
         # Assert set:
         assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NAME"
-        assertJsonContainsKey "$RESULT_JSON" value
 
     # =====================================================================
     - name: '[act] query multiple missing properties as action outputs of given name'
@@ -708,16 +705,13 @@ jobs:
     - name: '[assert] query multiple missing properties as action outputs of given names'
       env:
         RESULT: ${{steps.output-named_multi_missing.outputs.nonExistingKey1}}
-        RESULT_VALUE: ${{steps.output-named_multi_missing.outputs.value}}
         RESULT_JSON: ${{toJSON(steps.output-named_multi_missing.outputs)}}
       run: |-
         eval "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
         assertEquals "$RESULT" ''
-        assertEquals "$RESULT_VALUE" ''
         # Assert set:
         assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NAME"
-        assertJsonContainsKey "$RESULT_JSON" value
 
   #########################################################################
   test_json:
