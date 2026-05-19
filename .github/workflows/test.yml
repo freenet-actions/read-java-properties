@@ -526,9 +526,9 @@ jobs:
         resultType: output
     - name: '[assert] query single missing property as action output'
       env:
+        RESULT: ${{steps.output_single_missing.outputs._nonExistingKey1}}
+        RESULT_VALUE: ${{steps.output_single_missing.outputs.value}}
         RESULTS_JSON: ${{toJSON(steps.output_single_missing.outputs)}}
-        RESULT: ${{toJSON(steps.output_single_missing.outputs._nonExistingKey1)}}
-        RESULT_VALUE: ${{toJSON(steps.output_single_missing.outputs.value)}}
       run: &validateSingleMissingOutput |-
         eval "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
@@ -548,10 +548,10 @@ jobs:
         resultType: output
     - name: '[assert] query multiple missing properties as action outputs'
       env:
+        RESULT1: ${{steps.output_multi_missing.outputs._nonExistingKey1}}
+        RESULT2: ${{steps.output_multi_missing.outputs._nonExistingKey2}}
+        RESULT_VALUE: ${{steps.output_multi_missing.outputs.value}}
         RESULTS_JSON: ${{toJSON(steps.output_multi_missing.outputs)}}
-        RESULT1: ${{toJSON(steps.output_multi_missing.outputs._nonExistingKey1)}}
-        RESULT2: ${{toJSON(steps.output_multi_missing.outputs._nonExistingKey2)}}
-        RESULT_VALUE: ${{toJSON(steps.output_multi_missing.outputs.value)}}
       # This is only reusable for output… resultTypes, because it calls encodeKey.
       run: &validateMultiMissingOutput |-
         eval "$SHELL_SETUP"
@@ -675,9 +675,9 @@ jobs:
         resultType: 'output-named:${{env.SELECTED_NAME}}'
     - name: '[assert] query single missing property as action output of given name'
       env:
+        RESULT: ${{steps.output-named_single_missing.outputs.my-prop}}
+        RESULT_VALUE: ${{steps.output-named_single_missing.outputs.value}}
         RESULTS_JSON: ${{toJSON(steps.output-named_single_missing.outputs)}}
-        RESULT: ${{toJSON(steps.output-named_single_missing.outputs.my-prop)}}
-        RESULT_VALUE: ${{toJSON(steps.output-named_single_missing.outputs.value)}}
       run: *validateSingleMissingOutput
 
     # =====================================================================
@@ -690,10 +690,10 @@ jobs:
         resultType: 'output-named:${{env.SELECTED_NAME}}'
     - name: '[assert] query multiple missing properties as action outputs of given names'
       env:
-        RESULTS_JSON: ${{toJSON(steps.output-named_multi_missing.outputs)}}
-        RESULT1: ${{toJSON(steps.output-named_multi_missing.outputs.nonExistingKey1)}}
+        RESULT1: ${{steps.output-named_multi_missing.outputs.nonExistingKey1}}
         RESULT2: ''
-        RESULT_VALUE: ${{toJSON(steps.output-named_multi_missing.outputs.value)}}
+        RESULT_VALUE: ${{steps.output-named_multi_missing.outputs.value}}
+        RESULTS_JSON: ${{toJSON(steps.output-named_multi_missing.outputs)}}
       run: *validateMultiMissingOutput
 
   #########################################################################
