@@ -96,7 +96,7 @@ env:
       local json=$1; shift
       local key=$1; shift
       debugPrintf 'getJsonValue("%s", "%s")\n' "$json" "$key"
-      jq --arg k "$key" --raw-output '.[$k] // (("key " + $k + " not found") | halt_error(env.NOT_FOUND_STATUS | tonumber))' <<<"$json"
+      jq --arg k "$key" --raw-output '.[$k] // (("key " + $k + " not found\n") | halt_error(env.NOT_FOUND_STATUS | tonumber))' <<<"$json"
     }
 
     assertJsonDoesNotContainKey() {
@@ -762,7 +762,7 @@ jobs:
         resultType: json
     - name: '[assert] query multiple missing properties as JSON action output'
       env:
-        RESULT_JSON: ${{toJSON(steps.json_multi_missing.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.json_multi_missing.outputs.json)}}
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: &validateMultiMissingJsonImpl |-
         eval "$SHELL_SETUP"
@@ -827,7 +827,7 @@ jobs:
       id: json-file_all_arrange
       # Distinction between creating and overwriting need not be tested again.
       # This test just uses an existing empty file.
-      run: |-
+      run: &createEmptyJsonFile |-
         # Remove leading "./" ⇒ Also test the case where given file has "no parent" (i.e. Java method
         # java.nio.file.Path.getParent() returns null).
         file=$(mktemp --tmpdir=. test_json-file_all_XXXXXX.json | sed 's=^\./==')
@@ -844,6 +844,9 @@ jobs:
       run: *validateAllImpl
 
     # =====================================================================
+    - name: '[arrange] query multiple missing properties as JSON file'
+      id: json-file_multi_missing_arrange
+      run: *createEmptyJsonFile
     - name: '[act] query multiple missing properties as JSON file'
       id: json-file_multi_missing
       uses: ./
@@ -853,8 +856,8 @@ jobs:
         resultType: json
     - name: '[assert] query multiple missing properties as JSON file'
       env:
-        RESULT_JSON: ${{toJSON(steps.json-file_multi_missing.outputs)}}
-        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+        JSON_OUTPUT_FILE: ${{steps.json-file_multi_missing_arrange.outputs.file}}
+        RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateMultiMissingJsonImpl
 
   # Each test which sets environment variables is a separate job to be independant of other tests.
