@@ -96,7 +96,7 @@ env:
       local json=$1; shift
       local key=$1; shift
       debugPrintf 'getJsonValue("%s", "%s")\n' "$json" "$key"
-      jq --arg k "$key" --raw-output '.[$k] // (("key " + $key + " not found") | halt_error(env.NOT_FOUND_STATUS | tonumber))' <<<"$json"
+      jq --arg k "$key" --raw-output '.[$k] // (("key " + $k + " not found") | halt_error(env.NOT_FOUND_STATUS | tonumber))' <<<"$json"
     }
 
     assertJsonDoesNotContainKey() {
