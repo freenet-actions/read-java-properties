@@ -195,7 +195,7 @@ jobs:
 
     # =====================================================================
     - name: '[act] (should fail): invalid input: resultType'
-      id: error-input-resultType
+      id: input-error_resultType
       continue-on-error: true
       uses: ./
       with:
@@ -203,8 +203,8 @@ jobs:
         resultType: rt1
     - name: '[assert] (should fail): invalid input: resultType'
       env:
-        STATUS: ${{steps.error-input-resultType.outcome}}
-        ERROR: ${{steps.error-input-resultType.outputs.error}}
+        STATUS: ${{steps.input-error_resultType.outcome}}
+        ERROR: ${{steps.input-error_resultType.outputs.error}}
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$STATUS" failure
@@ -212,7 +212,7 @@ jobs:
 
     # =====================================================================
     - name: '[act] (should fail): resultType "output-named" without names'
-      id: error-resultType-output-without-names
+      id: input-error_resultType-output-without-names
       continue-on-error: true
       uses: ./
       with:
@@ -221,8 +221,8 @@ jobs:
         resultType: 'output-named:'
     - name: '[assert] (should fail): resultType "output-named" without names'
       env:
-        STATUS: ${{steps.error-resultType-output-without-names.outcome}}
-        ERROR: ${{steps.error-resultType-output-without-names.outputs.error}}
+        STATUS: ${{steps.input-error_resultType-output-without-names.outcome}}
+        ERROR: ${{steps.input-error_resultType-output-without-names.outputs.error}}
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$STATUS" failure
@@ -230,7 +230,7 @@ jobs:
 
     # =====================================================================
     - name: '[act] (should fail): resultType "env-named" without names'
-      id: error-resultType-env-without-names
+      id: input-error_resultType-env-without-names
       continue-on-error: true
       uses: ./
       with:
@@ -239,8 +239,8 @@ jobs:
         resultType: 'env-named:'
     - name: '[assert] (should fail): resultType "env-named" without names'
       env:
-        STATUS: ${{steps.error-resultType-env-without-names.outcome}}
-        ERROR: ${{steps.error-resultType-env-without-names.outputs.error}}
+        STATUS: ${{steps.input-error_resultType-env-without-names.outcome}}
+        ERROR: ${{steps.input-error_resultType-env-without-names.outputs.error}}
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$STATUS" failure
@@ -248,7 +248,7 @@ jobs:
 
     # =====================================================================
     - name: '[act] (should fail): resultType "output-named" without keys'
-      id: error-resultType-output-without-keys
+      id: input-error_resultType-output-without-keys
       continue-on-error: true
       uses: ./
       with:
@@ -256,8 +256,8 @@ jobs:
         resultType: 'output-named:a b'
     - name: '[assert] (should fail): resultType "output-named" without keys'
       env:
-        STATUS: ${{steps.error-resultType-output-without-keys.outcome}}
-        ERROR: ${{steps.error-resultType-output-without-keys.outputs.error}}
+        STATUS: ${{steps.input-error_resultType-output-without-keys.outcome}}
+        ERROR: ${{steps.input-error_resultType-output-without-keys.outputs.error}}
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$STATUS" failure
@@ -265,7 +265,7 @@ jobs:
 
     # =====================================================================
     - name: '[act] (should fail): resultType "env-named" without keys'
-      id: error-resultType-env-without-keys
+      id: input-error_resultType-env-without-keys
       continue-on-error: true
       uses: ./
       with:
@@ -273,8 +273,8 @@ jobs:
         resultType: 'env-named:a b'
     - name: '[assert] (should fail): resultType "env-named" without keys'
       env:
-        STATUS: ${{steps.error-resultType-env-without-keys.outcome}}
-        ERROR: ${{steps.error-resultType-env-without-keys.outputs.error}}
+        STATUS: ${{steps.input-error_resultType-env-without-keys.outcome}}
+        ERROR: ${{steps.input-error_resultType-env-without-keys.outputs.error}}
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$STATUS" failure
@@ -720,20 +720,20 @@ jobs:
     - *checkoutStep
     # =====================================================================
     - name: '[act] query all properties as JSON action output'
-      id: all-json
+      id: json_all
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: json
     - name: '[assert] query all properties as JSON action output'
       env:
-        RESULT_JSON: ${{steps.all-json.outputs.json}}
+        RESULT_JSON: ${{steps.json_all.outputs.json}}
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: *validateAllImpl
 
     # =====================================================================
     - name: '[act] query multiple properties as JSON action output'
-      id: multiple-json
+      id: json_multi
       uses: ./
       with:
         file: test/resources/test.properties
@@ -741,9 +741,32 @@ jobs:
         resultType: json
     - name: '[assert] query multiple properties as JSON action output'
       env:
-        RESULT_JSON: ${{steps.multiple-json.outputs.json}}
+        RESULT_JSON: ${{steps.json_multi.outputs.json}}
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: *validateMultiImpl
+
+    # =====================================================================
+    - name: '[act] query multiple missing properties as JSON action output'
+      id: json_multi_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_KEYS}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: json
+    - name: '[assert] query multiple missing properties as JSON action output'
+      env:
+        RESULT_JSON: ${{toJSON(steps.json_multi_missing.outputs)}}
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: |-
+        eval "$SHELL_SETUP"
+        evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion  '21'
+        evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" colon:in:Key       'c'
+        evalAndAssertEquals "$RESULT_GETTER" unicode_escapes    'a«,»c'
+        evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_NON_EX_KEY"  ''
+        evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_NON_EX_KEY2" ''
+        assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NON_EX_KEY"
+        assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NON_EX_KEY2"
 
   #########################################################################
   test_json-file:
@@ -752,7 +775,7 @@ jobs:
     - *checkoutStep
     # =====================================================================
     - name: '[arrange] query multiple properties as JSON file (creating file)'
-      id: multiple-json-file-create-arrange
+      id: json-file_multi_create_arrange
       run: |-
         parentDir=$(mktemp --directory --dry-run --tmpdir=. test_json-file_multi_create_XXXXXX)
         file=$parentDir/out/result.json
@@ -763,16 +786,16 @@ jobs:
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
-        resultType: 'json-file:${{steps.multiple-json-file-create-arrange.outputs.file}}'
+        resultType: 'json-file:${{steps.json-file_multi_create_arrange.outputs.file}}'
     - name: '[assert] query multiple properties as JSON file (creating file)'
       env:
-        JSON_OUTPUT_FILE: ${{steps.multiple-json-file-create-arrange.outputs.file}}
+        JSON_OUTPUT_FILE: ${{steps.json-file_multi_create_arrange.outputs.file}}
         RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateMultiImpl
 
     # =====================================================================
     - name: '[arrange] query multiple properties as JSON file (overwriting file)'
-      id: multiple-json-file-overwrite-arrange
+      id: json-file_multi_overwrite_arrange
       run: |-
         file=$(mktemp --tmpdir=. test_json-file_multi_overwrite_XXXXXX.json)
         # Write longer contents than the expected output. ⇒ If the action does not truncate, there will be
@@ -785,16 +808,16 @@ jobs:
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
-        resultType: 'json-file:${{steps.multiple-json-file-overwrite-arrange.outputs.file}}'
+        resultType: 'json-file:${{steps.json-file_multi_overwrite_arrange.outputs.file}}'
     - name: '[assert] query multiple properties as JSON file (overwriting file)'
       env:
-        JSON_OUTPUT_FILE: ${{steps.multiple-json-file-overwrite-arrange.outputs.file}}
+        JSON_OUTPUT_FILE: ${{steps.json-file_multi_overwrite_arrange.outputs.file}}
         RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateMultiImpl
 
     # =====================================================================
     - name: '[arrange] query all properties as JSON file'
-      id: all-json-file-arrange
+      id: json-file_all_arrange
       # Distinction between creating and overwriting need not be tested again.
       # This test just uses an existing empty file.
       run: |-
@@ -806,10 +829,10 @@ jobs:
       uses: ./
       with:
         file: test/resources/test.properties
-        resultType: 'json-file:${{steps.all-json-file-arrange.outputs.file}}'
+        resultType: 'json-file:${{steps.json-file_all_arrange.outputs.file}}'
     - name: '[assert] query all properties as JSON file'
       env:
-        JSON_OUTPUT_FILE: ${{steps.all-json-file-arrange.outputs.file}}
+        JSON_OUTPUT_FILE: ${{steps.json-file_all_arrange.outputs.file}}
         RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateAllImpl
 
