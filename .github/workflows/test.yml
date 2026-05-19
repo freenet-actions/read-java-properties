@@ -4,10 +4,12 @@ defaults:
   run:
     shell: bash
 env:
-  SELECTED_SINGLE_KEY: 'org.gradle.jvmargs'
+  SELECTED_KEY: 'sourceJavaVersion'
   SELECTED_KEYS: 'sourceJavaVersion org.gradle.jvmargs unicode_escapes colon:in:Key'
   SELECTED_KEYS_OTHER_ORDER: 'colon:in:Key sourceJavaVersion org.gradle.jvmargs unicode_escapes'
-  SELECTED_SINGLE_NAME: 'my-prop'
+  SELECTED_NON_EX_KEY: 'nonExistingKey1'
+  SELECTED_NON_EX_KEY2: 'nonExistingKey2'
+  SELECTED_NAME: 'my-prop'
   SELECTED_NAMES: 'java-version jvm_args unicode colon'
 
   NOT_FOUND_STATUS: 54
@@ -91,6 +93,19 @@ env:
       jq --arg k "$key" --raw-output '.[$k] // ("" | halt_error(env.NOT_FOUND_STATUS | tonumber))' <<<"$json"
     }
 
+    assertJsonDoesNotContainKey() {
+      if assertJsonContainsKey "$@"; then return 1; else return 0; fi
+    }
+
+    assertJsonContainsKey() {
+      local json=$1; shift
+      local key=$1; shift
+      debugPrintf 'assertJsonDoesNotContainKey("%s", "%s")\n' "$json" "$key"
+      local contains
+      contains=$(jq --arg k "$key" --raw-output 'keys | index($k) != null')
+      assertEquals "$contains" true
+    }
+
     # Extracts the value for key <output-style encoding of $2> from JSON $2.
     encodeKeyAndGetJsonValue() {
       local json=$1; shift
@@ -137,7 +152,7 @@ jobs:
     - test_env_all
     - test_env_multi
     - test_env-named_multi
-    - test_env-named_multi-to-one
+    - test_env-named_multi-to-single
     - test_env_single
     - test_env-with-prefix_all
     - test_env-with-prefix_multi
@@ -261,14 +276,14 @@ jobs:
     - *checkoutStep
     # =====================================================================
     - name: '[act] query single property with default resultType'
-      id: single-default
+      id: default_single
       uses: ./
       with:
         file: test/resources/test.properties
         keys: sourceJavaVersion
     - name: '[assert] query single property with default resultType'
       env:
-        RESULT: ${{steps.single-default.outputs._sourceJavaVersion}}
+        RESULT: ${{steps.default_single.outputs._sourceJavaVersion}}
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$RESULT" '21'
@@ -282,7 +297,7 @@ jobs:
     # name (instead of re-implemented).
     # It also demonstrates how you'd usually use outputs with one environment variable per output.
     - name: '[act] query multiple properties as action outputs (simple)'
-      id: multi-output-simple
+      id: output_multi_simple
       uses: ./
       with:
         file: test/resources/test.properties
@@ -290,11 +305,11 @@ jobs:
         resultType: output
     - name: '[assert] query multiple properties as action outputs (simple)'
       env:
-        RESULT_SJV:     ${{steps.multi-output-simple.outputs._sourceJavaVersion}}
-        RESULT_JVMARGS: ${{steps.multi-output-simple.outputs._org-002Egradle-002Ejvmargs}}
-        RESULT_COLONK:  ${{steps.multi-output-simple.outputs._colon-003Ain-003AKey}}
-        RESULT_DASHK:   ${{steps.multi-output-simple.outputs._dash-002Din-002DKey}}
-        RESULT_UNI:     ${{steps.multi-output-simple.outputs._unicode_escapes}}
+        RESULT_SJV:     ${{steps.output_multi_simple.outputs._sourceJavaVersion}}
+        RESULT_JVMARGS: ${{steps.output_multi_simple.outputs._org-002Egradle-002Ejvmargs}}
+        RESULT_COLONK:  ${{steps.output_multi_simple.outputs._colon-003Ain-003AKey}}
+        RESULT_DASHK:   ${{steps.output_multi_simple.outputs._dash-002Din-002DKey}}
+        RESULT_UNI:     ${{steps.output_multi_simple.outputs._unicode_escapes}}
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$RESULT_SJV"     '21'
@@ -305,14 +320,14 @@ jobs:
 
     # =====================================================================
     - name: '[act] query all properties as action outputs'
-      id: all-output
+      id: output_all
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: output
     - name: '[assert] query all properties as action outputs'
       env:
-        RESULT_JSON: ${{toJSON(steps.all-output.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.output_all.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateAllImpl |-
         eval "$SHELL_SETUP"
@@ -354,7 +369,7 @@ jobs:
 
     # =====================================================================
     - name: '[act] query multiple properties as action outputs'
-      id: multi-output
+      id: output_multi
       uses: ./
       with:
         file: test/resources/test.properties
@@ -363,7 +378,7 @@ jobs:
 
     - name: '[assert] query multiple properties as action outputs'
       env:
-        RESULT_JSON: ${{toJSON(steps.multi-output.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.output_multi.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateMultiImpl |-
         eval "$SHELL_SETUP"
@@ -407,7 +422,7 @@ jobs:
 
     # =====================================================================
     - name: '[act] query multiple properties as action outputs (different keySeparator)'
-      id: multi-output-keySeparator
+      id: output_multi_keySeparator
       uses: ./
       with:
         file: test/resources/test.properties
@@ -416,13 +431,13 @@ jobs:
         resultType: output
     - name: '[assert] query multiple properties as action outputs (different keySeparator)'
       env:
-        RESULT_JSON: ${{toJSON(steps.multi-output-keySeparator.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.output_multi_keySeparator.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: *validateMultiImpl
 
     # =====================================================================
     - name: '[act] query multiple properties as action outputs (different multi-char keySeparator)'
-      id: multi-output-keySeparatorMC
+      id: output_multi_keySeparatorMC
       uses: ./
       with:
         file: test/resources/test.properties
@@ -431,13 +446,13 @@ jobs:
         resultType: output
     - name: '[assert] query multiple properties as action outputs (different multi-char keySeparator)'
       env:
-        RESULT_JSON: ${{toJSON(steps.multi-output-keySeparatorMC.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.output_multi_keySeparatorMC.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: *validateMultiImpl
 
     # =====================================================================
     - name: '[act] query multiple properties as action outputs (in another keys order)'
-      id: multi-output-2
+      id: output_multi2
       uses: ./
       with:
         file: test/resources/test.properties
@@ -445,7 +460,7 @@ jobs:
         resultType: output
     - name: '[assert] query multiple properties as action outputs (in another keys order)'
       env:
-        RESULT_JSON: ${{toJSON(steps.multi-output-2.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.output_multi2.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: *validateMultiImpl
     - name: '[assert] query multiple properties as action outputs (in another keys order) (additional "value" output)'
@@ -455,114 +470,13 @@ jobs:
         eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" 'a«,»c' # from last key "unicode_escapes"
 
-  #########################################################################
-  test_output-named:
-    runs-on: ubuntu-latest
-    steps:
-    - *checkoutStep
-    # =====================================================================
-    - name: '[act] query multiple properties as action outputs of given names'
-      id: multi-output-named
-      uses: ./
-      with:
-        file: test/resources/test.properties
-        keys: '${{env.SELECTED_KEYS}}'
-        resultType: 'output-named:${{env.SELECTED_NAMES}}'
-
-    - name: '[assert] query multiple properties as action outputs of given names'
-      env:
-        RESULT_JSON: ${{toJSON(steps.multi-output-named.outputs)}}
-        # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
-        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
-      run: &validateMultiNamedImpl |-
-        eval "$SHELL_SETUP"
-        evalAndAssertEquals "$RESULT_GETTER" java-version '21'
-        evalAndAssertEquals "$RESULT_GETTER" jvm_args     '-ea -showversion'
-        evalAndAssertEquals "$RESULT_GETTER" colon        'c'
-        evalAndAssertEquals "$RESULT_GETTER" unicode      'a«,»c'
-
-        # The outputs with the default names are not set:
-        evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
-        evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
-        evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
-        evalAndAssertUndefined "$RESULT_GETTER" unicode_escapes
-
-        # Outputs for non-selected keys are not set, for example:
-        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
-        evalAndAssertUndefined "$RESULT_GETTER" dash_1
-
-    - name: '[assert] query multiple properties as action outputs (additional "value" output not set)'
-      env:
-        RESULT_VALUE: ${{steps.multi-output-named.outputs.value || 'U_N_S_E_T'}}
-      run: |-
-        eval "$SHELL_SETUP"
-        assertEquals "$RESULT_VALUE" U_N_S_E_T
-
-    # =====================================================================
-    - name: '[act] query multiple properties as action outputs of given names (different resultNameSeparator)'
-      id: multi-output-named-resultNameSeparator
-      uses: ./
-      with:
-        file: test/resources/test.properties
-        keys: '${{env.SELECTED_KEYS}}'
-        resultNameSeparator: '?' # something with a special meaning in regex; should be treated as literal
-        resultType: 'output-named:java-version?jvm_args?unicode?colon'
-    - name: '[assert] query multiple properties as action outputs of given names (different resultNameSeparator)'
-      env:
-        RESULT_JSON: ${{toJSON(steps.multi-output-named-resultNameSeparator.outputs)}}
-        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
-      run: *validateMultiNamedImpl
-
-    # =====================================================================
-    - name: '[act] query multiple properties as action outputs of given names (different multi-char resultNameSeparator)'
-      id: multi-output-named-resultNameSeparatorMC
-      uses: ./
-      with:
-        file: test/resources/test.properties
-        keys: '${{env.SELECTED_KEYS}}'
-        resultNameSeparator: '- -'
-        resultType: 'output-named:java-version- -jvm_args- -unicode- -colon'
-    - name: '[assert] query multiple properties as action outputs of given names (different multi-char resultNameSeparator)'
-      env:
-        RESULT_JSON: ${{toJSON(steps.multi-output-named-resultNameSeparatorMC.outputs)}}
-        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
-      run: *validateMultiNamedImpl
-
-    # =====================================================================
-    - name: '[act] query multiple properties as action outputs of given name'
-      id: multi-output-named1
-      uses: ./
-      with:
-        file: test/resources/test.properties
-        keys: '${{env.SELECTED_KEYS}}'
-        resultType: 'output-named:${{env.SELECTED_SINGLE_NAME}}'
-
-    - name: '[assert] query multiple properties as action outputs of given name'
-      env:
-        RESULT_JSON: ${{toJSON(steps.multi-output-named1.outputs)}}
-        # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
-        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
-      run: &validateMultiNamed1Impl |-
-        eval "$SHELL_SETUP"
-        evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_SINGLE_NAME" 'c'
-
-        # The outputs with the default names are not set:
-        evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
-        evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
-        evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
-        evalAndAssertUndefined "$RESULT_GETTER" unicode_escapes
-
-        # Outputs for non-selected keys are not set, for example:
-        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
-        evalAndAssertUndefined "$RESULT_GETTER" dash_1
-
     # =====================================================================
     - name: '[act] query single property as action outputs'
-      id: single-output
+      id: output_single
       uses: ./
       with:
         file: test/resources/test.properties
-        keys: '${{env.SELECTED_SINGLE_KEY}}'
+        keys: '${{env.SELECTED_KEY}}'
         resultType: output
 
     - name: '[assert] query multiple properties as action outputs'
@@ -571,10 +485,10 @@ jobs:
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateSingleImpl |-
         eval "$SHELL_SETUP"
-        evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" "SELECTED_KEY" '21'
 
         evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
-        evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
         evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
         evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
@@ -601,6 +515,185 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" dash_12
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
+
+    # =====================================================================
+    - name: '[act] query single missing property as action output'
+      id: output_single_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: ${{env.SELECTED_NON_EX_KEY}}
+        resultType: output
+    - name: '[assert] query single missing property as action output'
+      env:
+        RESULTS_JSON: ${{toJSON(steps.output_single_missing.outputs)}}
+        RESULT: ${{toJSON(steps.output_single_missing.outputs[env.SELECTED_NON_EX_KEY])}}
+        RESULT_VALUE: ${{toJSON(steps.output_single_missing.outputs.value)}}
+      run: &validateSingleMissingOutput |-
+        eval "$SHELL_SETUP"
+        # Like this, the expected empty value is not distinguishable from unset:
+        assertEquals "$RESULT" ''
+        assertEquals "$RESULT_VALUE" ''
+        # Assert set:
+        assertJsonContainsKey "$RESULTS_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY")"
+        assertJsonContainsKey "$RESULTS_JSON" value
+
+    # =====================================================================
+    - name: '[act] query multiple missing properties as action outputs'
+      id: output_multi_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: output
+    - name: '[assert] query multiple missing properties as action outputs'
+      env:
+        RESULTS_JSON: ${{toJSON(steps.output_multi_missing.outputs)}}
+        RESULT1: ${{toJSON(steps.output_multi_missing.outputs[env.SELECTED_NON_EX_KEY])}}
+        RESULT2: ${{toJSON(steps.output_multi_missing.outputs[env.SELECTED_NON_EX_KEY2])}}
+        RESULT_VALUE: ${{toJSON(steps.output_multi_missing.outputs.value)}}
+      run: &validateMultiMissingOutput |-
+        eval "$SHELL_SETUP"
+        # Like this, the expected empty value is not distinguishable from unset:
+        assertEquals "$RESULT1" ''
+        assertEquals "$RESULT2" ''
+        assertEquals "$RESULT_VALUE" ''
+        # Assert not set:
+        assertJsonContainsKey "$RESULTS_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY")"
+        assertJsonContainsKey "$RESULTS_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY2")"
+        assertJsonContainsKey "$RESULTS_JSON" value
+
+  #########################################################################
+  test_output-named:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs of given names'
+      id: output-named_multi
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'output-named:${{env.SELECTED_NAMES}}'
+
+    - name: '[assert] query multiple properties as action outputs of given names'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output-named_multi.outputs)}}
+        # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: &validateMultiNamedImpl |-
+        eval "$SHELL_SETUP"
+        evalAndAssertEquals "$RESULT_GETTER" java-version '21'
+        evalAndAssertEquals "$RESULT_GETTER" jvm_args     '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" colon        'c'
+        evalAndAssertEquals "$RESULT_GETTER" unicode      'a«,»c'
+
+        # The outputs with the default names are not set:
+        evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
+        evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
+        evalAndAssertUndefined "$RESULT_GETTER" unicode_escapes
+
+        # Outputs for non-selected keys are not set, for example:
+        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" dash_1
+
+    - name: '[assert] query multiple properties as action outputs (additional "value" output not set)'
+      env:
+        RESULT_VALUE: ${{steps.output-named_multi.outputs.value || 'U_N_S_E_T'}}
+      run: |-
+        eval "$SHELL_SETUP"
+        assertEquals "$RESULT_VALUE" U_N_S_E_T
+
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs of given names (different resultNameSeparator)'
+      id: output-named_multi_resultNameSeparator
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultNameSeparator: '?' # something with a special meaning in regex; should be treated as literal
+        resultType: 'output-named:java-version?jvm_args?unicode?colon'
+    - name: '[assert] query multiple properties as action outputs of given names (different resultNameSeparator)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output-named_multi_resultNameSeparator.outputs)}}
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: *validateMultiNamedImpl
+
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs of given names (different multi-char resultNameSeparator)'
+      id: output-named_multi_resultNameSeparatorMC
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultNameSeparator: '- -'
+        resultType: 'output-named:java-version- -jvm_args- -unicode- -colon'
+    - name: '[assert] query multiple properties as action outputs of given names (different multi-char resultNameSeparator)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output-named_multi_resultNameSeparatorMC.outputs)}}
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: *validateMultiNamedImpl
+
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs of given name'
+      id: output-named_multi-to-single
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'output-named:${{env.SELECTED_NAME}}'
+
+    - name: '[assert] query multiple properties as action outputs of given name'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output-named_multi-to-single.outputs)}}
+        # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: &validateMultiNamed1Impl |-
+        eval "$SHELL_SETUP"
+        evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_NAME" 'c'
+
+        # The outputs with the default names are not set:
+        evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
+        evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
+        evalAndAssertUndefined "$RESULT_GETTER" unicode_escapes
+
+        # Outputs for non-selected keys are not set, for example:
+        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" dash_1
+
+    # =====================================================================
+    - name: '[act] query single missing property as action output of given names'
+      id: output-named_single_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: ${{env.SELECTED_NON_EX_KEY}}
+        resultType: 'output-named:${{env.SELECTED_NAME}}'
+    - name: '[assert] query single missing property as action output of given names'
+      env:
+        RESULTS_JSON: ${{toJSON(steps.output-named_single_missing.outputs)}}
+        RESULT: ${{toJSON(steps.output-named_single_missing.outputs[env.SELECTED_NON_EX_KEY])}}
+        RESULT_VALUE: ${{toJSON(steps.output-named_single_missing.outputs.value)}}
+      run: *validateSingleMissingOutput
+
+    # =====================================================================
+    - name: '[act] query multiple missing properties as action outputs of given names'
+      id: output-named_multi_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: output
+    - name: '[assert] query multiple missing properties as action outputs of given names'
+      env:
+        RESULTS_JSON: ${{toJSON(steps.output-named_multi_missing.outputs)}}
+        RESULT1: ${{toJSON(steps.output-named_multi_missing.outputs[env.SELECTED_NON_EX_KEY])}}
+        RESULT2: ${{toJSON(steps.output-named_multi_missing.outputs[env.SELECTED_NON_EX_KEY2])}}
+        RESULT_VALUE: ${{toJSON(steps.output-named_multi_missing.outputs.value)}}
+      run: *validateMultiMissingOutput
 
   #########################################################################
   test_json:
@@ -755,7 +848,7 @@ jobs:
       run: *validateMultiNamedImpl
 
   #########################################################################
-  test_env-named_multi-to-one:
+  test_env-named_multi-to-single:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
@@ -765,7 +858,7 @@ jobs:
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
-        resultType: 'env-named:${{env.SELECTED_SINGLE_NAME}}'
+        resultType: 'env-named:${{env.SELECTED_NAME}}'
     - name: '[assert] query multiple properties as environment variables of given names'
       env:
         RESULT_GETTER: getEnv
@@ -781,7 +874,7 @@ jobs:
       uses: ./
       with:
         file: test/resources/test.properties
-        keys: '${{env.SELECTED_SINGLE_KEY}}'
+        keys: '${{env.SELECTED_KEY}}'
         resultType: env
     - name: '[assert] query single property as environment variable'
       env:
@@ -831,7 +924,7 @@ jobs:
       uses: ./
       with:
         file: test/resources/test.properties
-        keys: '${{env.SELECTED_SINGLE_KEY}}'
+        keys: '${{env.SELECTED_KEY}}'
         resultType: 'env:PROP__'
     - name: '[assert] query single property as environment variable with prefix'
       env:
