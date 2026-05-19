@@ -479,13 +479,13 @@ jobs:
         keys: '${{env.SELECTED_KEY}}'
         resultType: output
 
-    - name: '[assert] query multiple properties as action outputs'
+    - name: '[assert] query single properties as action outputs'
       env:
         RESULT_JSON: ${{toJSON(steps.output_single.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateSingleImpl |-
         eval "$SHELL_SETUP"
-        evalAndAssertEquals "$RESULT_GETTER" "SELECTED_KEY" '21'
+        evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_KEY" '21'
 
         evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
         evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
