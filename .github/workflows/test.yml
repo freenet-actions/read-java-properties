@@ -94,16 +94,21 @@ env:
     }
 
     assertJsonDoesNotContainKey() {
-      if assertJsonContainsKey "$@"; then return 1; else return 0; fi
+      assertJsonContainsKeyEquals "$@" false
     }
 
     assertJsonContainsKey() {
+      assertJsonContainsKeyEquals "$@" true
+    }
+
+    assertJsonContainsKeyEquals() {
       local json=$1; shift
       local key=$1; shift
-      debugPrintf 'assertJsonDoesNotContainKey("%s", "%s")\n' "$json" "$key"
+      local expected=$1; shift
+      debugPrintf 'assertJsonContainsKeyEquals("%s", "%s", "%s")\n' "$json" "$key" "$expected"
       local contains
-      contains=$(jq --arg k "$key" --raw-output 'keys | index($k) != null')
-      assertEquals "$contains" true
+      contains=$(jq --arg k "$key" --raw-output 'keys | index($k) != null' <<<"$json")
+      assertEquals "$contains" "$expected"
     }
 
     # Encodes a key $1 in the output-style encoding (property key to output name).
@@ -534,15 +539,15 @@ jobs:
       env:
         RESULT: ${{steps.output_single_missing.outputs._nonExistingKey1}}
         RESULT_VALUE: ${{steps.output_single_missing.outputs.value}}
-        RESULTS_JSON: ${{toJSON(steps.output_single_missing.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.output_single_missing.outputs)}}
       run: &validateSingleMissingOutput |-
         eval "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
         assertEquals "$RESULT" ''
         assertEquals "$RESULT_VALUE" ''
         # Assert set:
-        assertJsonContainsKey "$RESULTS_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY")"
-        assertJsonContainsKey "$RESULTS_JSON" value
+        assertJsonContainsKey "$RESULT_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY")"
+        assertJsonContainsKey "$RESULT_JSON" value
 
     # =====================================================================
     - name: '[act] query multiple missing properties as action outputs'
@@ -557,7 +562,7 @@ jobs:
         RESULT1: ${{steps.output_multi_missing.outputs._nonExistingKey1}}
         RESULT2: ${{steps.output_multi_missing.outputs._nonExistingKey2}}
         RESULT_VALUE: ${{steps.output_multi_missing.outputs.value}}
-        RESULTS_JSON: ${{toJSON(steps.output_multi_missing.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.output_multi_missing.outputs)}}
       # This is only reusable for output… resultTypes, because it calls encodeKey.
       run: &validateMultiMissingOutput |-
         eval "$SHELL_SETUP"
@@ -566,9 +571,9 @@ jobs:
         assertEquals "$RESULT2" ''
         assertEquals "$RESULT_VALUE" ''
         # Assert set:
-        assertJsonContainsKey "$RESULTS_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY")"
-        assertJsonContainsKey "$RESULTS_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY2")"
-        assertJsonContainsKey "$RESULTS_JSON" value
+        assertJsonContainsKey "$RESULT_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY")"
+        assertJsonContainsKey "$RESULT_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY2")"
+        assertJsonContainsKey "$RESULT_JSON" value
 
   #########################################################################
   test_output-named:
@@ -683,7 +688,7 @@ jobs:
       env:
         RESULT: ${{steps.output-named_single_missing.outputs.my-prop}}
         RESULT_VALUE: ${{steps.output-named_single_missing.outputs.value}}
-        RESULTS_JSON: ${{toJSON(steps.output-named_single_missing.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.output-named_single_missing.outputs)}}
       run: *validateSingleMissingOutput
 
     # =====================================================================
@@ -699,7 +704,7 @@ jobs:
         RESULT1: ${{steps.output-named_multi_missing.outputs.nonExistingKey1}}
         RESULT2: ''
         RESULT_VALUE: ${{steps.output-named_multi_missing.outputs.value}}
-        RESULTS_JSON: ${{toJSON(steps.output-named_multi_missing.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.output-named_multi_missing.outputs)}}
       run: *validateMultiMissingOutput
 
   #########################################################################
