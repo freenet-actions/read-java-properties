@@ -471,7 +471,7 @@ jobs:
         assertEquals "$RESULT_VALUE" 'a«,»c' # from last key "unicode_escapes"
 
     # =====================================================================
-    - name: '[act] query single property as action outputs'
+    - name: '[act] query single property as action output'
       id: output_single
       uses: ./
       with:
@@ -479,7 +479,7 @@ jobs:
         keys: '${{env.SELECTED_KEY}}'
         resultType: output
 
-    - name: '[assert] query single properties as action outputs'
+    - name: '[assert] query single property as action output'
       env:
         RESULT_JSON: ${{toJSON(steps.output_single.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
@@ -552,13 +552,14 @@ jobs:
         RESULT1: ${{toJSON(steps.output_multi_missing.outputs._nonExistingKey1)}}
         RESULT2: ${{toJSON(steps.output_multi_missing.outputs._nonExistingKey2)}}
         RESULT_VALUE: ${{toJSON(steps.output_multi_missing.outputs.value)}}
+      # This is only reusable for output… resultTypes, because it calls encodeKey.
       run: &validateMultiMissingOutput |-
         eval "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
         assertEquals "$RESULT1" ''
         assertEquals "$RESULT2" ''
         assertEquals "$RESULT_VALUE" ''
-        # Assert not set:
+        # Assert set:
         assertJsonContainsKey "$RESULTS_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY")"
         assertJsonContainsKey "$RESULTS_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY2")"
         assertJsonContainsKey "$RESULTS_JSON" value
@@ -675,23 +676,23 @@ jobs:
     - name: '[assert] query single missing property as action output of given name'
       env:
         RESULTS_JSON: ${{toJSON(steps.output-named_single_missing.outputs)}}
-        RESULT: ${{toJSON(steps.output-named_single_missing.outputs.nonExistingKey1)}}
+        RESULT: ${{toJSON(steps.output-named_single_missing.outputs.my-prop)}}
         RESULT_VALUE: ${{toJSON(steps.output-named_single_missing.outputs.value)}}
       run: *validateSingleMissingOutput
 
     # =====================================================================
-    - name: '[act] query multiple missing properties as action outputs of given names'
+    - name: '[act] query multiple missing properties as action outputs of given name'
       id: output-named_multi_missing
       uses: ./
       with:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_NON_EX_KEY2}}'
-        resultType: output
+        resultType: 'output-named:${{env.SELECTED_NAME}}'
     - name: '[assert] query multiple missing properties as action outputs of given names'
       env:
         RESULTS_JSON: ${{toJSON(steps.output-named_multi_missing.outputs)}}
         RESULT1: ${{toJSON(steps.output-named_multi_missing.outputs.nonExistingKey1)}}
-        RESULT2: ${{toJSON(steps.output-named_multi_missing.outputs.nonExistingKey2)}}
+        RESULT2: ''
         RESULT_VALUE: ${{toJSON(steps.output-named_multi_missing.outputs.value)}}
       run: *validateMultiMissingOutput
 
