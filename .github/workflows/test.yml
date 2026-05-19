@@ -771,15 +771,15 @@ jobs:
     - name: '[assert] query multiple missing properties as JSON action output'
       env:
         RESULT_JSON: ${{steps.json_multi_missing.outputs.json}}
-        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
-      run: &validateMultiMissingJsonImpl |-
+      run: |-
         eval "$SHELL_SETUP"
-        evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion  '21'
-        evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
-        evalAndAssertEquals "$RESULT_GETTER" colon:in:Key       'c'
-        evalAndAssertEquals "$RESULT_GETTER" unicode_escapes    'a«,»c'
-        evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_NON_EX_KEY"  ''
-        evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_NON_EX_KEY2" ''
+        resultGetter='getJsonValue "$RESULT_JSON"'
+        evalAndAssertEquals "$resultGetter" sourceJavaVersion  '21'
+        evalAndAssertEquals "$resultGetter" org.gradle.jvmargs '-ea -showversion'
+        evalAndAssertEquals "$resultGetter" colon:in:Key       'c'
+        evalAndAssertEquals "$resultGetter" unicode_escapes    'a«,»c'
+        evalAndAssertEquals "$resultGetter" "$SELECTED_NON_EX_KEY"  ''
+        evalAndAssertEquals "$resultGetter" "$SELECTED_NON_EX_KEY2" ''
         assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NON_EX_KEY"
         assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NON_EX_KEY2"
 
@@ -865,8 +865,18 @@ jobs:
     - name: '[assert] query multiple missing properties as JSON file'
       env:
         JSON_OUTPUT_FILE: ${{steps.json-file_multi_missing_arrange.outputs.file}}
-        RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
-      run: *validateMultiMissingJsonImpl
+      run: |-
+        eval "$SHELL_SETUP"
+        resultJson=$(<"$JSON_OUTPUT_FILE")
+        resultGetter='"getJsonValue "$resultJson"'
+        evalAndAssertEquals "$resultGetter" sourceJavaVersion  '21'
+        evalAndAssertEquals "$resultGetter" org.gradle.jvmargs '-ea -showversion'
+        evalAndAssertEquals "$resultGetter" colon:in:Key       'c'
+        evalAndAssertEquals "$resultGetter" unicode_escapes    'a«,»c'
+        evalAndAssertEquals "$resultGetter" "$SELECTED_NON_EX_KEY"  ''
+        evalAndAssertEquals "$resultGetter" "$SELECTED_NON_EX_KEY2" ''
+        assertJsonContainsKey "$resultJson" "$SELECTED_NON_EX_KEY"
+        assertJsonContainsKey "$resultJson" "$SELECTED_NON_EX_KEY2"
 
   # Each test which sets environment variables is a separate job to be independant of other tests.
   #########################################################################
