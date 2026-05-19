@@ -540,7 +540,7 @@ jobs:
         RESULT: ${{steps.output_single_missing.outputs._nonExistingKey1}}
         RESULT_VALUE: ${{steps.output_single_missing.outputs.value}}
         RESULT_JSON: ${{toJSON(steps.output_single_missing.outputs)}}
-      run: &validateSingleMissingOutput |-
+      run: |-
         eval "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
         assertEquals "$RESULT" ''
@@ -563,8 +563,7 @@ jobs:
         RESULT2: ${{steps.output_multi_missing.outputs._nonExistingKey2}}
         RESULT_VALUE: ${{steps.output_multi_missing.outputs.value}}
         RESULT_JSON: ${{toJSON(steps.output_multi_missing.outputs)}}
-      # This is only reusable for output… resultTypes, because it calls encodeKey.
-      run: &validateMultiMissingOutput |-
+      run: |-
         eval "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
         assertEquals "$RESULT1" ''
@@ -689,7 +688,14 @@ jobs:
         RESULT: ${{steps.output-named_single_missing.outputs.my-prop}}
         RESULT_VALUE: ${{steps.output-named_single_missing.outputs.value}}
         RESULT_JSON: ${{toJSON(steps.output-named_single_missing.outputs)}}
-      run: *validateSingleMissingOutput
+      run: |-
+        eval "$SHELL_SETUP"
+        # Like this, the expected empty value is not distinguishable from unset:
+        assertEquals "$RESULT" ''
+        assertEquals "$RESULT_VALUE" ''
+        # Assert set:
+        assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NAME"
+        assertJsonContainsKey "$RESULT_JSON" value
 
     # =====================================================================
     - name: '[act] query multiple missing properties as action outputs of given name'
@@ -701,11 +707,17 @@ jobs:
         resultType: 'output-named:${{env.SELECTED_NAME}}'
     - name: '[assert] query multiple missing properties as action outputs of given names'
       env:
-        RESULT1: ${{steps.output-named_multi_missing.outputs.nonExistingKey1}}
-        RESULT2: ''
+        RESULT: ${{steps.output-named_multi_missing.outputs.nonExistingKey1}}
         RESULT_VALUE: ${{steps.output-named_multi_missing.outputs.value}}
         RESULT_JSON: ${{toJSON(steps.output-named_multi_missing.outputs)}}
-      run: *validateMultiMissingOutput
+      run: |-
+        eval "$SHELL_SETUP"
+        # Like this, the expected empty value is not distinguishable from unset:
+        assertEquals "$RESULT" ''
+        assertEquals "$RESULT_VALUE" ''
+        # Assert set:
+        assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NAME"
+        assertJsonContainsKey "$RESULT_JSON" value
 
   #########################################################################
   test_json:
