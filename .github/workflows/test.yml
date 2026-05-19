@@ -868,7 +868,7 @@ jobs:
       run: |-
         eval "$SHELL_SETUP"
         resultJson=$(<"$JSON_OUTPUT_FILE")
-        resultGetter='"getJsonValue "$resultJson"'
+        resultGetter='getJsonValue "$resultJson"'
         evalAndAssertEquals "$resultGetter" sourceJavaVersion  '21'
         evalAndAssertEquals "$resultGetter" org.gradle.jvmargs '-ea -showversion'
         evalAndAssertEquals "$resultGetter" colon:in:Key       'c'
