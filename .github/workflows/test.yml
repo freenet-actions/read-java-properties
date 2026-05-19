@@ -62,7 +62,13 @@ env:
 
       local quotedArgs value
       quotedArgs=$(printf ' %q' "${args[@]}")
+
+      # Call $getterFunction once to check its status only before the call to capture its output.
+      # Otherwise, we'd get a misleading error from replaceLastLF if $getterFunction prints nothing and exits
+      # with $NOT_FOUND_STATUS.
+      eval "${getterFunction}${quotedArgs}" >/dev/null
       eval "value=\$(set -o pipefail; ${getterFunction}${quotedArgs} | replaceLastLF)"
+
       expectedValue="$(printf '%s\n' "$expectedValue" | replaceLastLF)"
       assertEquals "$value" "$expectedValue"
     }
@@ -90,7 +96,7 @@ env:
       local json=$1; shift
       local key=$1; shift
       debugPrintf 'getJsonValue("%s", "%s")\n' "$json" "$key"
-      jq --arg k "$key" --raw-output '.[$k] // ("" | halt_error(env.NOT_FOUND_STATUS | tonumber))' <<<"$json"
+      jq --arg k "$key" --raw-output '.[$k] // (("key " + $key + " not found") | halt_error(env.NOT_FOUND_STATUS | tonumber))' <<<"$json"
     }
 
     assertJsonDoesNotContainKey() {
@@ -134,6 +140,7 @@ env:
       if printenv -- "$key"; then
         : # OK
       elif [ ${st-$?} -eq 1 ]; then
+        printf 'environment variable %s not set\n' "$key" >&2
         return $NOT_FOUND_STATUS
       else
         # no error message, assuming printenv has already written one
@@ -757,7 +764,7 @@ jobs:
       env:
         RESULT_JSON: ${{toJSON(steps.json_multi_missing.outputs)}}
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
-      run: |-
+      run: &validateMultiMissingJsonImpl |-
         eval "$SHELL_SETUP"
         evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion  '21'
         evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
@@ -836,6 +843,19 @@ jobs:
         RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateAllImpl
 
+    # =====================================================================
+    - name: '[act] query multiple missing properties as JSON file'
+      id: json-file_multi_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_KEYS}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: json
+    - name: '[assert] query multiple missing properties as JSON file'
+      env:
+        RESULT_JSON: ${{toJSON(steps.json-file_multi_missing.outputs)}}
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: *validateMultiMissingJsonImpl
 
   # Each test which sets environment variables is a separate job to be independant of other tests.
   #########################################################################
