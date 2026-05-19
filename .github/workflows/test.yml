@@ -123,13 +123,15 @@ env:
     }
 
 jobs:
-  # Similar to [https://github.com/orgs/community/discussions/12395#discussioncomment-12970019], this step
+  #########################################################################
+  # Similar to [https://github.com/orgs/community/discussions/12395#discussioncomment-12970019], this
   # aggregates all job states, so that we need only this job as a status check in the GitHub repository settings.
   test:
     needs:
     - test_invalid-usage
     - test_default
     - test_output
+    - test_output-named
     - test_json
     - test_json-file
     - test_env_all
@@ -153,6 +155,7 @@ jobs:
             | map((.key + " has status " + (.value.result//"null") + "\n") | halt_error(1))[]
         ' <<<"$JOBS_TO_CHECK_JSON"
 
+  #########################################################################
   test_invalid-usage:
     runs-on: ubuntu-latest
     steps:
@@ -164,7 +167,7 @@ jobs:
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
 
-    ############################################################
+    # =====================================================================
     - name: '[act] (should fail): invalid input: resultType'
       id: error-input-resultType
       continue-on-error: true
@@ -181,7 +184,7 @@ jobs:
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid resultType: rt1'
 
-    ############################################################
+    # =====================================================================
     - name: '[act] (should fail): resultType "output-named" without names'
       id: error-resultType-output-without-names
       continue-on-error: true
@@ -199,7 +202,7 @@ jobs:
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid resultType output-named: (missing argument)'
 
-    ############################################################
+    # =====================================================================
     - name: '[act] (should fail): resultType "env-named" without names'
       id: error-resultType-env-without-names
       continue-on-error: true
@@ -217,7 +220,7 @@ jobs:
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid resultType env-named: (missing argument)'
 
-    ############################################################
+    # =====================================================================
     - name: '[act] (should fail): resultType "output-named" without keys'
       id: error-resultType-output-without-keys
       continue-on-error: true
@@ -234,7 +237,7 @@ jobs:
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid use of resultType output-named (missing keys)'
 
-    ############################################################
+    # =====================================================================
     - name: '[act] (should fail): resultType "env-named" without keys'
       id: error-resultType-env-without-keys
       continue-on-error: true
@@ -251,11 +254,12 @@ jobs:
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid use of resultType env-named (missing keys)'
 
+  #########################################################################
   test_default:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    ############################################################
+    # =====================================================================
     - name: '[act] query single property with default resultType'
       id: single-default
       uses: ./
@@ -273,7 +277,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    ############################################################
+    # =====================================================================
     # This tests a subset of test case multi-output, but with hard-coded encoding from property key to output
     # name (instead of re-implemented).
     # It also demonstrates how you'd usually use outputs with one environment variable per output.
@@ -299,7 +303,7 @@ jobs:
         assertEquals "$RESULT_DASHK"   'd'
         assertEquals "$RESULT_UNI"     'a«,»c'
 
-    ############################################################
+    # =====================================================================
     - name: '[act] query all properties as action outputs'
       id: all-output
       uses: ./
@@ -348,7 +352,7 @@ jobs:
         eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" U_N_S_E_T
 
-    ############################################################
+    # =====================================================================
     - name: '[act] query multiple properties as action outputs'
       id: multi-output
       uses: ./
@@ -401,7 +405,7 @@ jobs:
         eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" 'c' # from last key "colon:in:Key"
 
-    ############################################################
+    # =====================================================================
     - name: '[act] query multiple properties as action outputs (different keySeparator)'
       id: multi-output-keySeparator
       uses: ./
@@ -416,7 +420,7 @@ jobs:
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: *validateMultiImpl
 
-    ############################################################
+    # =====================================================================
     - name: '[act] query multiple properties as action outputs (different multi-char keySeparator)'
       id: multi-output-keySeparatorMC
       uses: ./
@@ -431,7 +435,7 @@ jobs:
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: *validateMultiImpl
 
-    ############################################################
+    # =====================================================================
     - name: '[act] query multiple properties as action outputs (in another keys order)'
       id: multi-output-2
       uses: ./
@@ -451,7 +455,12 @@ jobs:
         eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" 'a«,»c' # from last key "unicode_escapes"
 
-    ############################################################
+  #########################################################################
+  test_output-named:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
     - name: '[act] query multiple properties as action outputs of given names'
       id: multi-output-named
       uses: ./
@@ -489,7 +498,7 @@ jobs:
         eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" U_N_S_E_T
 
-    ############################################################
+    # =====================================================================
     - name: '[act] query multiple properties as action outputs of given names (different resultNameSeparator)'
       id: multi-output-named-resultNameSeparator
       uses: ./
@@ -504,7 +513,7 @@ jobs:
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: *validateMultiNamedImpl
 
-    ############################################################
+    # =====================================================================
     - name: '[act] query multiple properties as action outputs of given names (different multi-char resultNameSeparator)'
       id: multi-output-named-resultNameSeparatorMC
       uses: ./
@@ -519,7 +528,7 @@ jobs:
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: *validateMultiNamedImpl
 
-    ############################################################
+    # =====================================================================
     - name: '[act] query multiple properties as action outputs of given name'
       id: multi-output-named1
       uses: ./
@@ -547,7 +556,7 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" colonInValue
         evalAndAssertUndefined "$RESULT_GETTER" dash_1
 
-    ############################################################
+    # =====================================================================
     - name: '[act] query single property as action outputs'
       id: single-output
       uses: ./
@@ -593,11 +602,12 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
 
+  #########################################################################
   test_json:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    ############################################################
+    # =====================================================================
     - name: '[act] query all properties as JSON action output'
       id: all-json
       uses: ./
@@ -610,7 +620,7 @@ jobs:
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: *validateAllImpl
 
-    ############################################################
+    # =====================================================================
     - name: '[act] query multiple properties as JSON action output'
       id: multiple-json
       uses: ./
@@ -624,11 +634,12 @@ jobs:
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: *validateMultiImpl
 
+  #########################################################################
   test_json-file:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
-    ############################################################
+    # =====================================================================
     - name: '[arrange] query multiple properties as JSON file (creating file)'
       id: multiple-json-file-create-arrange
       run: |-
@@ -648,7 +659,7 @@ jobs:
         RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateMultiImpl
 
-    ############################################################
+    # =====================================================================
     - name: '[arrange] query multiple properties as JSON file (overwriting file)'
       id: multiple-json-file-overwrite-arrange
       run: |-
@@ -670,7 +681,7 @@ jobs:
         RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
       run: *validateMultiImpl
 
-    ############################################################
+    # =====================================================================
     - name: '[arrange] query all properties as JSON file'
       id: all-json-file-arrange
       # Distinction between creating and overwriting need not be tested again.
@@ -693,11 +704,12 @@ jobs:
 
 
   # Each test which sets environment variables is a separate job to be independant of other tests.
-  ############################################################
+  #########################################################################
   test_env_all:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
+    # =====================================================================
     - name: '[act] query all properties as environment variables'
       uses: ./
       with:
@@ -708,11 +720,12 @@ jobs:
         RESULT_GETTER: getEnv
       run: *validateAllImpl
 
-  ############################################################
+  #########################################################################
   test_env_multi:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
+    # =====================================================================
     - name: '[act] query multiple properties as environment variables'
       uses: ./
       with:
@@ -724,11 +737,12 @@ jobs:
         RESULT_GETTER: getEnv
       run: *validateMultiImpl
 
-  ############################################################
+  #########################################################################
   test_env-named_multi:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
+    # =====================================================================
     - name: '[act] query multiple properties as environment variables of given names'
       uses: ./
       with:
@@ -740,11 +754,12 @@ jobs:
         RESULT_GETTER: getEnv
       run: *validateMultiNamedImpl
 
-  ############################################################
+  #########################################################################
   test_env-named_multi-to-one:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
+    # =====================================================================
     - name: '[act] query multiple properties as environment variables of given names'
       uses: ./
       with:
@@ -756,11 +771,12 @@ jobs:
         RESULT_GETTER: getEnv
       run: *validateMultiNamed1Impl
 
-  ############################################################
+  #########################################################################
   test_env_single:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
+    # =====================================================================
     - name: '[act] query single property as environment variable'
       uses: ./
       with:
@@ -772,11 +788,12 @@ jobs:
         RESULT_GETTER: getEnv
       run: *validateSingleImpl
 
-  ############################################################
+  #########################################################################
   test_env-with-prefix_all:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
+    # =====================================================================
     - name: '[act] query all properties as environment variables with prefix'
       uses: ./
       with:
@@ -787,11 +804,12 @@ jobs:
         RESULT_GETTER: 'getEnvWithPrefix ALL_PROPS__'
       run: *validateAllImpl
 
-  ############################################################
+  #########################################################################
   test_env-with-prefix_multi:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
+    # =====================================================================
     - name: '[act] query multiple properties as environment variables with prefix'
       uses: ./
       with:
@@ -803,11 +821,12 @@ jobs:
         RESULT_GETTER: 'getEnvWithPrefix MULTI_PROPS__'
       run: *validateMultiImpl
 
-  ############################################################
+  #########################################################################
   test_env-with-prefix_single:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
+    # =====================================================================
     - name: '[act] query single property as environment variable with prefix'
       uses: ./
       with:
