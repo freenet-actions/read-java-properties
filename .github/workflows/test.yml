@@ -362,7 +362,7 @@ jobs:
         evalAndAssertEquals "$RESULT_GETTER" dash_3_4_8_1        $'---\n----\n--------\n-'
     - name: '[assert] query all properties as action outputs (additional "value" output not set)'
       env:
-        RESULT_VALUE: ${{steps.all-output.outputs.value || 'U_N_S_E_T'}}
+        RESULT_VALUE: ${{steps.output_all.outputs.value || 'U_N_S_E_T'}}
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" U_N_S_E_T
@@ -415,7 +415,7 @@ jobs:
 
     - name: '[assert] query multiple properties as action outputs (additional "value" output)'
       env:
-        RESULT_VALUE: ${{steps.multi-output.outputs.value}}
+        RESULT_VALUE: ${{steps.output_multi.outputs.value}}
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" 'c' # from last key "colon:in:Key"
@@ -465,7 +465,7 @@ jobs:
       run: *validateMultiImpl
     - name: '[assert] query multiple properties as action outputs (in another keys order) (additional "value" output)'
       env:
-        RESULT_VALUE: ${{steps.multi-output-2.outputs.value}}
+        RESULT_VALUE: ${{steps.output_multi2.outputs.value}}
       run: |-
         eval "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" 'a«,»c' # from last key "unicode_escapes"
@@ -481,7 +481,7 @@ jobs:
 
     - name: '[assert] query multiple properties as action outputs'
       env:
-        RESULT_JSON: ${{toJSON(steps.single-output.outputs)}}
+        RESULT_JSON: ${{toJSON(steps.output_single.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateSingleImpl |-
         eval "$SHELL_SETUP"
