@@ -527,7 +527,7 @@ jobs:
     - name: '[assert] query single missing property as action output'
       env:
         RESULTS_JSON: ${{toJSON(steps.output_single_missing.outputs)}}
-        RESULT: ${{toJSON(steps.output_single_missing.outputs.nonExistingKey1)}}
+        RESULT: ${{toJSON(steps.output_single_missing.outputs._nonExistingKey1)}}
         RESULT_VALUE: ${{toJSON(steps.output_single_missing.outputs.value)}}
       run: &validateSingleMissingOutput |-
         eval "$SHELL_SETUP"
@@ -549,8 +549,8 @@ jobs:
     - name: '[assert] query multiple missing properties as action outputs'
       env:
         RESULTS_JSON: ${{toJSON(steps.output_multi_missing.outputs)}}
-        RESULT1: ${{toJSON(steps.output_multi_missing.outputs.nonExistingKey1)}}
-        RESULT2: ${{toJSON(steps.output_multi_missing.outputs.nonExistingKey2)}}
+        RESULT1: ${{toJSON(steps.output_multi_missing.outputs._nonExistingKey1)}}
+        RESULT2: ${{toJSON(steps.output_multi_missing.outputs._nonExistingKey2)}}
         RESULT_VALUE: ${{toJSON(steps.output_multi_missing.outputs.value)}}
       run: &validateMultiMissingOutput |-
         eval "$SHELL_SETUP"
