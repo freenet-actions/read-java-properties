@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 public class Action {
 	private Action() {}
 
-	static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Exception {
 		try {
 			Config config = Config.fromEnv();
 			ResultWriter resultWriter = ResultWriter.of(config.resultType());
