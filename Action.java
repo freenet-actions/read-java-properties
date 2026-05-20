@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,11 +30,16 @@ public class Action {
 			ResultWriter resultWriter = ResultWriter.of(config.resultType());
 			for (String file : args) {
 				Properties properties = Util.readProperties(file);
-				Map<String, String> selectedProperties = config.selectedKeys()
+				// If selectedKeys is set, this Map will have exactly those keys and values may be empty (where selected key is
+				// not found in properties).
+				// Otherwise, this Map will have the same keys as the properties file, and "not found" is not possible.
+				Map<String, Optional<String>> selectedProperties = config.selectedKeys()
 				        .map(keys -> Util.selectProperties(properties, keys, file)) //
 				        .orElseGet(() -> Util.stringEntries(properties));
 				resultWriter.write(selectedProperties, config);
 			}
+		} catch (IoRuntimeException e) {
+			throw e.getCause();
 		} catch (OutputException e) {
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
 				writer.write(Ids.OutputName.ERROR, e.getMessage());
@@ -97,6 +103,18 @@ class Ids {
 }
 
 
+class IoRuntimeException extends RuntimeException {
+	public IoRuntimeException(IOException cause) {
+		super(cause);
+	}
+
+	@Override
+	public synchronized IOException getCause() {
+		return (IOException) super.getCause();
+	}
+}
+
+
 /**
  * An exception for which an "error" output should be set.
  */
@@ -156,17 +174,17 @@ record Config(Optional<List<String>> selectedKeys, String keySeparator, String r
 enum ResultWriter {
 	OUTPUT(Ids.ResultWriterName.OUTPUT) {
 		@Override
-		public void write(Map<String, String> props, Config config) throws IOException {
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
 			String lastValue = null;
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
-				for (Map.Entry<String, String> entry : props.entrySet()) {
+				for (Map.Entry<String, Optional<String>> entry : props.entrySet()) {
 					String key = encodeKey(config.outputPrefix() + entry.getKey());
-					lastValue = entry.getValue();
+					lastValue = entry.getValue().orElse("");
 					writer.write(key, lastValue);
 				}
 
-				if (config.selectedKeys().isPresent() && lastValue != null) {
-					writer.write(Ids.OutputName.VALUE, lastValue);
+				if (config.selectedKeys().isPresent()) {
+					writer.write(Ids.OutputName.VALUE, lastValue != null ? lastValue : "");
 				}
 			}
 		}
@@ -183,48 +201,49 @@ enum ResultWriter {
 	},
 	OUTPUT_NAMED(Ids.ResultWriterName.OUTPUT_NAMED) {
 		@Override
-		public void write(Map<String, String> props, Config config) throws IOException {
-			writeNamedImpl(props, config, GitHubOutputFile.OUTPUT);
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
+			writeNamedImpl(props, config, true, GitHubOutputFile.OUTPUT);
 		}
 	},
 	ENV_NAMED(Ids.ResultWriterName.ENV_NAMED) {
 		@Override
-		public void write(Map<String, String> props, Config config) throws IOException {
-			writeNamedImpl(props, config, GitHubOutputFile.ENV);
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
+			writeNamedImpl(props, config, false, GitHubOutputFile.ENV);
 		}
 	},
 	ENV(Ids.ResultWriterName.ENV) {
 		@Override
-		public void write(Map<String, String> props, Config config) throws IOException {
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
 			String prefix = config.resultTypeArg();
 			try (GitHubVariableWriter writer = GitHubOutputFile.ENV.open()) {
-				for (Map.Entry<String, String> entry : props.entrySet()) {
-					writer.write(prefix + entry.getKey(), entry.getValue());
+				for (Map.Entry<String, Optional<String>> entry : props.entrySet()) {
+					Optional<String> value = entry.getValue();
+					value.ifPresent(v -> writer.write(prefix + entry.getKey(), v));
 				}
 			}
 		}
 	},
 	JSON(Ids.ResultWriterName.JSON) {
 		@Override
-		public void write(Map<String, String> props, Config config) throws IOException {
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
 			config.requireNoArg();
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
-				writer.write(Ids.OutputName.JSON, Util.toJson(props));
+				writer.write(Ids.OutputName.JSON, Util.toJson(props).s());
 			}
 		}
 	},
 	JSON_FILE(Ids.ResultWriterName.JSON_FILE) {
 		@Override
-		public void write(Map<String, String> props, Config config) throws IOException {
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
 			String outputFile = config.requiredResultTypeArg();
 			Path parentDir = Paths.get(outputFile).getParent();
 			if (parentDir != null) {
 				Files.createDirectories(parentDir);
 			}
 			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-				String jsonResult = Util.toJson(props);
-				System.err.format("writing JSON for %s properties to %s%n", props.size(), outputFile);
-				writer.write(jsonResult);
+				StringIntPair jsonResult = Util.toJson(props);
+				System.err.format("writing JSON for %s properties to %s%n", jsonResult.i(), outputFile);
+				writer.write(jsonResult.s());
 				writer.write('\n');
 				writer.flush();
 			}
@@ -246,10 +265,10 @@ enum ResultWriter {
 		throw OutputException.forIllegalArgument("invalid " + Ids.ConfigVariable.RESULT_TYPE + ": " + externalName);
 	}
 
-	public abstract void write(Map<String, String> props, Config config) throws IOException;
+	public abstract void write(Map<String, Optional<String>> props, Config config) throws IOException;
 
-	private static void writeNamedImpl(Map<String, String> props, Config config, GitHubOutputFile gitHubOutputFile)
-	        throws IOException {
+	private static void writeNamedImpl(Map<String, Optional<String>> props, Config config, boolean includeMissing,
+	        GitHubOutputFile gitHubOutputFile) throws IOException {
 		List<String> selectedKeys = config.selectedKeys().orElseThrow(() -> OutputException.forIllegalArgument("invalid use of "
 		        + Ids.ConfigVariable.RESULT_TYPE + " " + config.resultType() + " (missing " + Ids.ConfigVariable.KEYS + ")"));
 
@@ -263,8 +282,14 @@ enum ResultWriter {
 		try (GitHubVariableWriter writer = gitHubOutputFile.open()) {
 			for (int i = 0; i < selectedKeys.size(); i++) {
 				String name = resultNames[resultNames.length == 1 ? 0 : i];
-				String value = props.get(selectedKeys.get(i));
-				writer.write(name, value != null ? value : "");
+				Optional<String> value = props.get(selectedKeys.get(i));
+				value.ifPresentOrElse(v -> writer.write(name, v), () -> {
+					if (includeMissing) {
+						writer.write(name, "");
+					} else {
+						// Nothing to do. "not found" has already been logged.
+					}
+				});
 			}
 		}
 	}
@@ -300,21 +325,25 @@ class GitHubVariableWriter implements AutoCloseable {
 		this.writer = Util.openFile(fileName, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 	}
 
-	public void write(String key, String value) throws IOException {
-		System.err.format("setting %s %s%n", description, key);
+	public void write(String key, String value) {
+		try {
+			System.err.format("setting %s %s%n", description, key);
 
-		// write (very) simple values in format "<key>=<value>":
-		if (SIMPLE_VALUE.matcher(value).matches()) {
-			this.writer.write(key);
-			this.writer.write('=');
-			this.writer.write(value);
-			this.writer.write('\n');
-		} else {
-			writeMultiLine(key, value);
+			// write (very) simple values in format "<key>=<value>":
+			if (SIMPLE_VALUE.matcher(value).matches()) {
+				this.writer.write(key);
+				this.writer.write('=');
+				this.writer.write(value);
+				this.writer.write('\n');
+			} else {
+				writeMultiLine(key, value);
+			}
+		} catch (IOException e) {
+			throw new IoRuntimeException(e);
 		}
 	}
 
-	public void write(Ids.OutputName key, String value) throws IOException {
+	public void write(Ids.OutputName key, String value) {
 		write(key.externalName, value);
 	}
 
@@ -393,13 +422,13 @@ class Util {
 	/**
 	 * Selects the properties with the given keys and returns them as a Map with the corresponding iteration order.
 	 */
-	public static Map<String, String> selectProperties(Properties allProps, List<String> selectedKeys, String file) {
+	public static Map<String, Optional<String>> selectProperties(Properties allProps, List<String> selectedKeys, String file) {
 		Set<String> unmatchedKeysSet = new LinkedHashSet<>(selectedKeys);
-		Map<String, String> results = new LinkedHashMap<>();
+		Map<String, Optional<String>> results = new LinkedHashMap<>();
 		for (String key : selectedKeys) {
 			String value = allProps.getProperty(key);
+			results.put(key, Optional.ofNullable(value));
 			if (value != null) {
-				results.put(key, value);
 				unmatchedKeysSet.remove(key);
 			}
 		}
@@ -409,25 +438,40 @@ class Util {
 		return results;
 	}
 
-	public static Map<String, String> stringEntries(Properties props) {
-		Map<String, String> map = new LinkedHashMap<>();
+	/**
+	 * @return the Properties as a Map with each value as a non-empty Optional (strange, but useful for our use case)
+	 */
+	public static Map<String, Optional<String>> stringEntries(Properties props) {
+		Map<String, Optional<String>> map = new LinkedHashMap<>();
 		for (String key : props.stringPropertyNames()) {
-			map.put(key, props.getProperty(key));
+			map.put(key, Optional.of(props.getProperty(key)));
 		}
 		return map;
 	}
 
-	public static String toJson(Map<String, String> map) {
+	/**
+	 * @return the JSON string and the number of entries with non-empty value
+	 */
+	public static StringIntPair toJson(Map<String, Optional<String>> map) {
+		AtomicInteger size = new AtomicInteger(0);
 		StringBuilder s = new StringBuilder(50).append('{');
 		int initialLength = s.length();
-		for (Map.Entry<String, String> entry : map.entrySet()) {
-			s.append(s.length() == initialLength ? '"' : ", \"");
-			appendJsonString(s, entry.getKey());
-			s.append("\": \"");
-			appendJsonString(s, entry.getValue());
+		for (Map.Entry<String, Optional<String>> entry : map.entrySet()) {
+			if (s.length() != initialLength) {
+				s.append(", ");
+			}
 			s.append('"');
+			appendJsonString(s, entry.getKey());
+			s.append("\": ");
+			entry.getValue().ifPresentOrElse(value -> {
+				size.incrementAndGet();
+				s.append('"');
+				appendJsonString(s, value);
+				s.append('"');
+			}, () -> s.append("null"));
 		}
-		return s.append('}').toString();
+		s.append('}');
+		return new StringIntPair(s.toString(), size.get());
 	}
 
 	private static void appendJsonString(StringBuilder buffer, String s) {
@@ -455,4 +499,8 @@ class Util {
 			}
 		}
 	}
+}
+
+
+record StringIntPair(String s, int i) {
 }
