@@ -35,7 +35,6 @@ jobs:
     - test_env-with-prefix_all
     - test_env-with-prefix_multi
     - test_env-with-prefix_single
-    - foo
     if: always()
     runs-on: ubuntu-latest
     steps:
