@@ -29,6 +29,11 @@ env:
       perl -e '$/ = undef; $_ = <>; ($r = $_) =~ s{\n$}{}; die "missing trailing LF\n" if $r eq $_; printf "%s¶", $r'
     }
 
+    assertVariableUnset() {
+      local varName=$1; shift
+      eval "assertEquals \"\${${varName}-undefined}\" undefined"
+    }
+
     assertEquals() {
       debugPrintf 'assertEquals("%s", "%s")\n' "$1" "$2"
       if [ "$1" = "$2" ]; then
@@ -927,10 +932,9 @@ jobs:
     - name: '[assert] query multiple missing properties as environment variables'
       run: |-
         eval "$SHELL_SETUP"
-        # Assert not set:
-        assertEquals "${SELECTED_NON_EX_KEY-undef}"  'undef'
-        assertEquals "${SELECTED_NON_EX_KEY2-undef}" 'undef'
-        assertEquals "${SELECTED_KEY}" '21'
+        assertVariableUnset "$SELECTED_NON_EX_KEY"
+        assertVariableUnset "$SELECTED_NON_EX_KEY2"
+        assertEquals "$SELECTED_KEY" '21'
 
   #########################################################################
   test_env_single:
@@ -1031,9 +1035,8 @@ jobs:
     - name: '[assert] query multiple missing properties as environment variables'
       run: |-
         eval "$SHELL_SETUP"
-        # Assert not set:
-        assertEquals "${NE1-undef}" 'undef'
-        assertEquals "${NE2-undef}" 'undef'
+        assertVariableUnset "$NE1"
+        assertVariableUnset "$NE2"
         assertEquals "${E1}" '21'
 
   #########################################################################
