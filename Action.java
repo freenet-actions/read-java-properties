@@ -1,5 +1,4 @@
 import java.io.BufferedWriter;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
@@ -209,8 +208,8 @@ enum MissingFileHandler {
 	WARNING_MESSAGE(Ids.MissingFileHandlerName.WARNING_MESSAGE, "warning"), //
 	ERROR(Ids.MissingFileHandlerName.ERROR, "error") {
 		@Override
-		public void handleMissingFile(Path file, String message) {
-			super.handleMissingFile(file, message);
+		public void handleMissingFile(String message) {
+			super.handleMissingFile(message);
 			throw new ExitSilentlyException(2);
 		}
 	};
@@ -235,8 +234,8 @@ enum MissingFileHandler {
 	@SuppressWarnings("java:S3457") // Sonar rule suggests %n instead of \n, but that would not strictly be covered by the docs
 	// [https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-a-notice-message], so the \r
 	// might be considered part of the message.
-	public void handleMissingFile(Path file, String message) {
-		System.out.format("::%s::error opening file %s: %s\n", output, file, message);
+	public void handleMissingFile(String message) {
+		System.out.format("::%s::%s\n", output, message);
 	}
 }
 
