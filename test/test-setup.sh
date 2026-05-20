@@ -90,7 +90,7 @@ evalAndAssertUndefined() {
 	if eval "value=\$(${getterFunction}${quotedArgs})"; then
 		printf 'assertion error: %s == "%s", expected undefined\n' "$*" "$value" >&2
 		return 1
-	elif [ ${st-$?} -eq "$NOT_FOUND_STATUS" ]; then
+	elif [ "${st=$?}" -eq "$NOT_FOUND_STATUS" ]; then
 		printf 'ok: %s is undefined\n' "$*" >&2
 	else
 		# no error message, assuming failed $getterFunction has already written one
