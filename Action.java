@@ -191,7 +191,7 @@ enum ResultWriter {
 
 		private static String encodeKey(String key) {
 			StringBuilder result = new StringBuilder(key.length() + 4);
-			Matcher matcher = Pattern.compile("([\\p{Punct}&&[^_]])").matcher(key);
+			Matcher matcher = Pattern.compile("([\\s\\p{Punct}&&[^_]])").matcher(key);
 			while (matcher.find()) {
 				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
 			}
