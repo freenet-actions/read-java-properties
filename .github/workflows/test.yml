@@ -49,11 +49,12 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: "check that this job's `needs` is set to exactly all other jobs"
       env:
+        THIS_WORKFLOW_FILE: '.github/workflows/test.yml'
         THIS_JOB_NAME: test
       run: |-
         diff --minimal --report-identical-files \
-          <(yq -r '.jobs | keys() | .[]' <.github/workflows/test.yml | sort | grep --line-regexp --fixed-strings --invert-match -- "$THIS_JOB_NAME") \
-          <(yq -r '.jobs.test.needs[]'   <.github/workflows/test.yml | sort)
+          <(yq -r '.jobs | keys() | .[]' <"$THIS_WORKFLOW_FILE" | sort | grep --line-regexp --fixed-strings --invert-match -- "$THIS_JOB_NAME") \
+          <(yq -r '.jobs.test.needs[]'   <"$THIS_WORKFLOW_FILE" | sort)
 
     - name: check overall status
       env:
