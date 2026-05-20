@@ -22,6 +22,7 @@ jobs:
   test:
     needs:
     - test_invalid-usage
+    - test_missing-file
     - test_default
     - test_output
     - test_output-named
@@ -176,6 +177,78 @@ jobs:
         . "$SHELL_SETUP"
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid use of resultType env-named (missing keys)'
+
+  #########################################################################
+  test_missing-file:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+
+    # =====================================================================
+    - name: '[act] missing file with default onMissingFile "notice-message"'
+      id: file-error_onMissingFile-notice-message
+      uses: ./
+      with:
+        file: test/resources/DOES_NOT_EXIST.properties
+        onMissingFile: notice-message
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] missing file with onMissingFile "notice-message"'
+      env:
+        RESULT_JSON: ${{steps.file-error_onMissingFile-notice-message.outputs.json}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$(getJsonValue "$RESULT_JSON" "$SELECTED_KEY")" ''
+
+    # =====================================================================
+    - name: '[act] missing file with default onMissingFile "warning-message"'
+      id: file-error_onMissingFile-warning-message
+      uses: ./
+      with:
+        file: test/resources/DOES_NOT_EXIST.properties
+        onMissingFile: warning-message
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] missing file with onMissingFile "warning-message"'
+      env:
+        RESULT_JSON: ${{steps.file-error_onMissingFile-warning-message.outputs.json}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$(getJsonValue "$RESULT_JSON" "$SELECTED_KEY")" ''
+
+    # =====================================================================
+    - name: '[act] (should fail): missing file with default onMissingFile "error"'
+      id: file-error_onMissingFile-error
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/DOES_NOT_EXIST.properties
+        onMissingFile: error
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] (should fail): missing file with onMissingFile "error"'
+      env:
+        STATUS: ${{steps.file-error_onMissingFile-error.outcome}}
+        RESULT_JSON: ${{steps.file-error_onMissingFile-error.outputs.json}}
+      run: &validateOnMissingFileErrorImpl |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$RESULT_JSON" ''
+
+    # =====================================================================
+    - name: '[act] (should fail): missing file with default onMissingFile'
+      id: file-error_onMissingFile-default
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/DOES_NOT_EXIST.properties
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] (should fail): missing file with default onMissingFile'
+      env:
+        STATUS: ${{steps.file-error_onMissingFile-default.outcome}}
+        RESULT_JSON: ${{steps.file-error_onMissingFile-default.outputs.json}}
+      run: *validateOnMissingFileErrorImpl
 
   #########################################################################
   test_default:
