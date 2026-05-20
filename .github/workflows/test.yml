@@ -31,9 +31,26 @@ env:
 
     assertVariableUnset() {
       local varName=$1; shift
-      printf '$%s: ' "$varName" >&2
-      eval "assertEquals \"\${${varName}-undefined}\" undefined"
+      if [ "${!varName+defined}" = defined ]; then
+        printf 'assertion error: %s (== "%s") is set\n' "$varName" "${!varName}" >&2
+        return 1
+      else
+        printf 'ok: %s is not set\n' "$varName" >&2
+      fi
     }
+    # test this function:
+    (
+      set +e
+      unset x;     assertVariableUnset x >&/dev/null; statusUnset=$?
+      x='';        assertVariableUnset x >&/dev/null; statusEmpty=$?
+      x=foo;       assertVariableUnset x >&/dev/null; statusNonEmpty1=$?
+      x=defined;   assertVariableUnset x >&/dev/null; statusNonEmpty2=$?
+      set -e
+      [ $statusUnset     -eq 0 ]
+      [ $statusEmpty     -ne 0 ]
+      [ $statusNonEmpty1 -ne 0 ]
+      [ $statusNonEmpty2 -ne 0 ]
+    )
 
     assertEquals() {
       debugPrintf 'assertEquals("%s", "%s")\n' "$1" "$2"
