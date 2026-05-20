@@ -9,6 +9,7 @@ import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -371,7 +372,7 @@ class GitHubVariableWriter implements AutoCloseable {
 	@SuppressWarnings("java:S1643") // Sonar rule: "Strings should not be concatenated using '+' in a loop".
 	// False positive: We would need that StringBuilder's toString for each iteration for the contains check anyway.
 	private static String computeSeparator(String value) {
-		Set<String> valueLines = Set.of(value.split("(?s)\n"));
+		Set<String> valueLines = new HashSet<>(List.of(value.split("(?s)\n")));
 		String separatorPart = "----";
 		@SuppressWarnings("java:S1643")
 		String separator = separatorPart;
