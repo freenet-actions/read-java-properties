@@ -30,7 +30,7 @@ public class Action {
 			Config config = Config.fromEnv();
 			ResultWriter resultWriter = ResultWriter.of(config.resultType());
 			for (String file : args) {
-				Properties properties = Util.readProperties(file);
+				Properties properties = Util.readProperties(file, config.missingFileHandler());
 				// If selectedKeys is set, this Map will have exactly those keys and values may be empty (where selected key is
 				// not found in properties).
 				// Otherwise, this Map will have the same keys as the properties file, and "not found" is not possible.
@@ -39,6 +39,8 @@ public class Action {
 				        .orElseGet(() -> Util.stringEntries(properties));
 				resultWriter.write(selectedProperties, config);
 			}
+		} catch (ExitSilentlyException e) {
+			System.exit(e.status);
 		} catch (IoRuntimeException e) {
 			throw e.getCause();
 		} catch (OutputException e) {
@@ -62,6 +64,7 @@ class Ids {
 	 */
 	enum ConfigVariable {
 		FILE("file"), //
+		ON_MISSING_FILE("onMissingFile"), //
 		KEYS("keys"), //
 		RESULT_TYPE("resultType"), //
 		KEY_SEPARATOR("keySeparator"), //
@@ -77,6 +80,18 @@ class Ids {
 		@Override
 		public String toString() {
 			return externalName;
+		}
+	}
+
+	enum MissingFileHandlerName {
+		NOTICE_MESSAGE("notice-message"), //
+		WARNING_MESSAGE("warning-message"), //
+		ERROR("error");
+
+		public final String externalName;
+
+		private MissingFileHandlerName(String externalName) {
+			this.externalName = externalName;
 		}
 	}
 
@@ -130,8 +145,18 @@ class OutputException extends RuntimeException {
 }
 
 
-record Config(Optional<List<String>> selectedKeys, String keySeparator, String resultTypeWithArg, String resultType,
-        String resultTypeArg, String resultNameSeparator, String outputPrefix) {
+class ExitSilentlyException extends RuntimeException {
+	public final int status;
+
+	public ExitSilentlyException(int status) {
+		super();
+		this.status = status;
+	}
+}
+
+
+record Config(MissingFileHandler missingFileHandler, Optional<List<String>> selectedKeys, String keySeparator,
+        String resultTypeWithArg, String resultType, String resultTypeArg, String resultNameSeparator, String outputPrefix) {
 	public static Config fromEnv() {
 		// In order to keep the defaults DRY (in action.yml), the environment variables are all mandatory.
 		String keySeparator = Util.getRequiredEnv(Ids.ConfigVariable.KEY_SEPARATOR);
@@ -150,8 +175,8 @@ record Config(Optional<List<String>> selectedKeys, String keySeparator, String r
 		String resultType = matcher.group(1);
 		String resultTypeArg = Optional.ofNullable(matcher.group(2)).orElse("");
 		String outputPrefix = Util.getRequiredEnv(Ids.ConfigVariable.OUTPUT_PREFIX);
-		return new Config(keys.map(List::of), keySeparator, resultTypeWithArg, resultType, resultTypeArg, resultNameSeparator,
-		        outputPrefix);
+		return new Config(MissingFileHandler.valueOf(Util.getRequiredEnv(Ids.ConfigVariable.ON_MISSING_FILE)), keys.map(List::of),
+		        keySeparator, resultTypeWithArg, resultType, resultTypeArg, resultNameSeparator, outputPrefix);
 	}
 
 	public String requiredResultTypeArg() {
@@ -168,6 +193,43 @@ record Config(Optional<List<String>> selectedKeys, String keySeparator, String r
 			throw OutputException.forIllegalArgument(
 			        "invalid " + Ids.ConfigVariable.RESULT_TYPE + " " + resultTypeWithArg() + " (non-empty argument)");
 		}
+	}
+}
+
+
+enum MissingFileHandler {
+	NOTICE_MESSAGE(Ids.MissingFileHandlerName.NOTICE_MESSAGE, "notice"), //
+	WARNING_MESSAGE(Ids.MissingFileHandlerName.WARNING_MESSAGE, "warning"), //
+	ERROR(Ids.MissingFileHandlerName.ERROR, "error") {
+		@Override
+		public void handleMissingFile(Path file, String message) {
+			super.handleMissingFile(file, message);
+			throw new ExitSilentlyException(2);
+		}
+	};
+
+	private final String externalName;
+	private final String output;
+
+	private MissingFileHandler(Ids.MissingFileHandlerName externalName, String output) {
+		this.externalName = externalName.externalName;
+		this.output = output;
+	}
+
+	public static MissingFileHandler of(String externalName) {
+		for (MissingFileHandler o : MissingFileHandler.values()) {
+			if (o.externalName.equals(externalName)) {
+				return o;
+			}
+		}
+		throw OutputException.forIllegalArgument("invalid " + Ids.ConfigVariable.ON_MISSING_FILE + ": " + externalName);
+	}
+
+	@SuppressWarnings("java:S3457") // Sonar rule suggests %n instead of \n, but that would not strictly be covered by the docs
+	// [https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-a-notice-message], so the \r
+	// might be considered part of the message.
+	public void handleMissingFile(Path file, String message) {
+		System.out.format("::%s::error opening file %s: %s\n", output, file, message);
 	}
 }
 
@@ -375,7 +437,6 @@ class GitHubVariableWriter implements AutoCloseable {
 	private static String computeSeparator(String value) {
 		Set<String> valueLines = new HashSet<>(List.of(value.split("(?s)\n")));
 		String separatorPart = "----";
-		@SuppressWarnings("java:S1643")
 		String separator = separatorPart;
 		while (valueLines.contains(separator)) {
 			separator = separator + separatorPart;
@@ -413,12 +474,16 @@ class Util {
 		return new BufferedWriter(new OutputStreamWriter(Files.newOutputStream(Paths.get(name), options), StandardCharsets.UTF_8));
 	}
 
-	public static Properties readProperties(String file) throws IOException {
+	public static Properties readProperties(String file, MissingFileHandler missingFileHandler) {
 		Properties allProps = new Properties();
-		try (InputStream in = Files.newInputStream(Paths.get(file))) {
+		Path path = Paths.get(file);
+		try (InputStream in = Files.newInputStream(path)) {
 			allProps.load(in);
+			return allProps;
+		} catch (IOException e) {
+			missingFileHandler.handleMissingFile(path, e.getMessage());
+			return new Properties();
 		}
-		return allProps;
 	}
 
 	/**

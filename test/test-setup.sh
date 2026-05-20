@@ -99,6 +99,7 @@ evalAndAssertUndefined() {
 }
 
 # Extracts the value for key $2 from JSON $1.
+# Successfully prints nothing if the value is null or empty, but fails if the key is not present.
 getJsonValue() {
 	local json=$1; shift
 	local key=$1; shift
