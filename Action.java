@@ -28,7 +28,7 @@ public class Action {
 	static void main(String[] args) throws Exception {
 		try {
 			Config config = Config.fromEnv();
-			ResultWriter resultWriter = ResultWriter.of(config.resultType());
+			ResultWriter resultWriter = ResultWriter.ofExternalName(config.resultType());
 			for (String file : args) {
 				Properties properties = Util.readProperties(file, config.missingFileHandler());
 				// If selectedKeys is set, this Map will have exactly those keys and values may be empty (where selected key is
@@ -175,8 +175,14 @@ record Config(MissingFileHandler missingFileHandler, Optional<List<String>> sele
 		String resultType = matcher.group(1);
 		String resultTypeArg = Optional.ofNullable(matcher.group(2)).orElse("");
 		String outputPrefix = Util.getRequiredEnv(Ids.ConfigVariable.OUTPUT_PREFIX);
-		return new Config(MissingFileHandler.valueOf(Util.getRequiredEnv(Ids.ConfigVariable.ON_MISSING_FILE)), keys.map(List::of),
-		        keySeparator, resultTypeWithArg, resultType, resultTypeArg, resultNameSeparator, outputPrefix);
+		return new Config( //
+		        MissingFileHandler.ofExternalName(Util.getRequiredEnv(Ids.ConfigVariable.ON_MISSING_FILE)), //
+		        keys.map(List::of), keySeparator, //
+		        resultTypeWithArg, //
+		        resultType, //
+		        resultTypeArg, //
+		        resultNameSeparator, //
+		        outputPrefix);
 	}
 
 	public String requiredResultTypeArg() {
@@ -216,7 +222,7 @@ enum MissingFileHandler {
 		this.output = output;
 	}
 
-	public static MissingFileHandler of(String externalName) {
+	public static MissingFileHandler ofExternalName(String externalName) {
 		for (MissingFileHandler o : MissingFileHandler.values()) {
 			if (o.externalName.equals(externalName)) {
 				return o;
@@ -320,7 +326,7 @@ enum ResultWriter {
 		this.externalName = externalName.externalName;
 	}
 
-	public static ResultWriter of(String externalName) {
+	public static ResultWriter ofExternalName(String externalName) {
 		for (ResultWriter rw : ResultWriter.values()) {
 			if (rw.externalName.equals(externalName)) {
 				return rw;
