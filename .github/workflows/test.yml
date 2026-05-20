@@ -31,6 +31,7 @@ env:
 
     assertVariableUnset() {
       local varName=$1; shift
+      printf '$%s: ' "$varName" >&2
       eval "assertEquals \"\${${varName}-undefined}\" undefined"
     }
 
