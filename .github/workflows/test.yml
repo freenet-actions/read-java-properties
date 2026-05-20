@@ -245,6 +245,7 @@ jobs:
         evalAndAssertEquals "$RESULT_GETTER" dash_11             '-----------'
         evalAndAssertEquals "$RESULT_GETTER" dash_12             '------------'
         evalAndAssertEquals "$RESULT_GETTER" dash_3_4_1          $'---\n----\n-'
+        evalAndAssertEquals "$RESULT_GETTER" dash_3_4_1_4_2      $'---\n----\n-\n----\n--'
         evalAndAssertEquals "$RESULT_GETTER" dash_3_4_8_1        $'---\n----\n--------\n-'
     - name: '[assert] query all properties as action outputs (additional "value" output not set)'
       env:
@@ -297,6 +298,7 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" dash_11
         evalAndAssertUndefined "$RESULT_GETTER" dash_12
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1_4_2
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
 
     - name: '[assert] query multiple properties as action outputs (additional "value" output)'
@@ -400,6 +402,7 @@ jobs:
         evalAndAssertUndefined "$RESULT_GETTER" dash_11
         evalAndAssertUndefined "$RESULT_GETTER" dash_12
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1_4_2
         evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
 
     # =====================================================================
