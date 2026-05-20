@@ -913,38 +913,24 @@ jobs:
       run: *validateMultiImpl
 
   #########################################################################
-  test_env-named_multi:
+  test_env_multi_missing:
     runs-on: ubuntu-latest
     steps:
     - *checkoutStep
     # =====================================================================
-    - name: '[act] query multiple properties as environment variables of given names'
+    - name: '[act] query multiple missing properties as environment variables'
       uses: ./
       with:
         file: test/resources/test.properties
-        keys: '${{env.SELECTED_KEYS}}'
-        resultType: 'env-named:${{env.SELECTED_NAMES}}'
-    - name: '[assert] query multiple properties as environment variables of given names'
-      env:
-        RESULT_GETTER: getEnv
-      run: *validateMultiNamedImpl
-
-  #########################################################################
-  test_env-named_multi-to-single:
-    runs-on: ubuntu-latest
-    steps:
-    - *checkoutStep
-    # =====================================================================
-    - name: '[act] query multiple properties as environment variables of given names'
-      uses: ./
-      with:
-        file: test/resources/test.properties
-        keys: '${{env.SELECTED_KEYS}}'
-        resultType: 'env-named:${{env.SELECTED_NAME}}'
-    - name: '[assert] query multiple properties as environment variables of given names'
-      env:
-        RESULT_GETTER: getEnv
-      run: *validateMultiNamed1Impl
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_KEY}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: env
+    - name: '[assert] query multiple missing properties as environment variables'
+      run: |-
+        eval "$SHELL_SETUP"
+        # Assert not set:
+        assertEquals "${SELECTED_NON_EX_KEY-undef}"  'undef'
+        assertEquals "${SELECTED_NON_EX_KEY2-undef}" 'undef'
+        assertEquals "${SELECTED_KEY}" '21'
 
   #########################################################################
   test_env_single:
@@ -1012,3 +998,57 @@ jobs:
       env:
         RESULT_GETTER: 'getEnvWithPrefix PROP__'
       run: *validateSingleImpl
+
+  #########################################################################
+  test_env-named_multi:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple properties as environment variables of given names'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'env-named:${{env.SELECTED_NAMES}}'
+    - name: '[assert] query multiple properties as environment variables of given names'
+      env:
+        RESULT_GETTER: getEnv
+      run: *validateMultiNamedImpl
+
+  #########################################################################
+  test_env-named_multi_missing:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple missing properties as environment variables'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_KEY}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: 'env-named:NE1 E1 NE2'
+    - name: '[assert] query multiple missing properties as environment variables'
+      run: |-
+        eval "$SHELL_SETUP"
+        # Assert not set:
+        assertEquals "${NE1-undef}" 'undef'
+        assertEquals "${NE2-undef}" 'undef'
+        assertEquals "${E1}" '21'
+
+  #########################################################################
+  test_env-named_multi-to-single:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple properties as environment variables of given names'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'env-named:${{env.SELECTED_NAME}}'
+    - name: '[assert] query multiple properties as environment variables of given names'
+      env:
+        RESULT_GETTER: getEnv
+      run: *validateMultiNamed1Impl
