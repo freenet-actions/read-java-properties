@@ -934,7 +934,7 @@ jobs:
         eval "$SHELL_SETUP"
         assertVariableUnset "$SELECTED_NON_EX_KEY"
         assertVariableUnset "$SELECTED_NON_EX_KEY2"
-        assertEquals "$SELECTED_KEY" '21'
+        assertEquals "${!SELECTED_KEY}" '21'
 
   #########################################################################
   test_env_single:
@@ -1035,9 +1035,9 @@ jobs:
     - name: '[assert] query multiple missing properties as environment variables'
       run: |-
         eval "$SHELL_SETUP"
-        assertVariableUnset "$NE1"
-        assertVariableUnset "$NE2"
-        assertEquals "${E1}" '21'
+        assertVariableUnset NE1
+        assertVariableUnset NE2
+        assertEquals "$E1" '21'
 
   #########################################################################
   test_env-named_multi-to-single:
