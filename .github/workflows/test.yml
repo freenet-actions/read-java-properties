@@ -29,15 +29,30 @@ jobs:
     - test_json-file
     - test_env_all
     - test_env_multi
+    - test_env_multi_missing
+    - test_env_single
     - test_env-named_multi
     - test_env-named_multi-to-single
-    - test_env_single
+    - test_env-named_multi_missing
     - test_env-with-prefix_all
     - test_env-with-prefix_multi
     - test_env-with-prefix_single
     if: always()
     runs-on: ubuntu-latest
     steps:
+    - &checkoutStep
+      name: Checkout
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ github.head_ref }}
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: "check that this job's `needs` is set to exactly all other jobs"
+      run: |-
+        diff --minimal \
+          <(yq -r '.jobs | keys() | .[]' .github/workflows/test.yml | sort | grep --line-regexp --fixed-strings --invert-match test) \
+          <(yq -r '.jobs.test.needs[]' < .github/workflows/test.yml | sort)
+
     - name: check overall status
       env:
         JOBS_TO_CHECK_JSON: ${{toJSON(needs)}}
@@ -52,13 +67,7 @@ jobs:
   test_invalid-usage:
     runs-on: ubuntu-latest
     steps:
-    - &checkoutStep
-      name: Checkout
-      uses: actions/checkout@v6
-      with:
-        ref: ${{ github.head_ref }}
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
+    - *checkoutStep
 
     # =====================================================================
     - name: '[act] (should fail): invalid input: resultType'
