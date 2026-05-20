@@ -490,7 +490,7 @@ class Util {
 			// Nice message (instead of catching FileNotFoundExeption which is also thrown on other problems and just contains the
 			// filename, not "does not exist" or similar):
 			String message = Files.exists(path) ? ("error opening file: " + e.getMessage()) : ("file " + path + " does not exist");
-			missingFileHandler.handleMissingFile(path, message);
+			missingFileHandler.handleMissingFile(message);
 			return new Properties();
 		}
 	}
