@@ -9,4 +9,4 @@ LABEL "maintainer"="Team MCBS Core <tp.sd.back.mcbs@freenet.ag>"
 WORKDIR /action
 COPY *.java .
 RUN ["javac", "Action.java"]
-ENTRYPOINT ["java", "--class-path", ".", "Action"]
+ENTRYPOINT ["java", "--class-path", "/action", "Action"]
