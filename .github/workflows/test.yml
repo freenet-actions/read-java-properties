@@ -188,22 +188,21 @@ jobs:
       uses: ./
       with:
         file: test/resources/test.properties
-        keys: '${{env.SELECTED_KEYS}} dash-in-Key'
+        keySeparator: ', '
+        keys: 'sourceJavaVersion, org.gradle.jvmargs, space in Key, dash-in-Key'
         resultType: output
     - name: '[assert] query multiple properties as action outputs (simple)'
       env:
         RESULT_SJV:     ${{steps.output_multi_simple.outputs._sourceJavaVersion}}
         RESULT_JVMARGS: ${{steps.output_multi_simple.outputs._org-002Egradle-002Ejvmargs}}
-        RESULT_COLONK:  ${{steps.output_multi_simple.outputs._colon-003Ain-003AKey}}
+        RESULT_SPACEK:  ${{steps.output_multi_simple.outputs._space-0020in-0020Key}}
         RESULT_DASHK:   ${{steps.output_multi_simple.outputs._dash-002Din-002DKey}}
-        RESULT_UNI:     ${{steps.output_multi_simple.outputs._unicode_escapes}}
       run: |-
         . "$SHELL_SETUP"
         assertEquals "$RESULT_SJV"     '21'
         assertEquals "$RESULT_JVMARGS" '-ea -showversion'
-        assertEquals "$RESULT_COLONK"  'c'
+        assertEquals "$RESULT_SPACEK"  'sp'
         assertEquals "$RESULT_DASHK"   'd'
-        assertEquals "$RESULT_UNI"     'a«,»c'
 
     # =====================================================================
     - name: '[act] query all properties as action outputs'
