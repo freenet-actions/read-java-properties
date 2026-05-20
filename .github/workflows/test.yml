@@ -29,9 +29,11 @@ jobs:
     - test_json-file
     - test_env_all
     - test_env_multi
+    - test_env_multi_missing
+    - test_env_single
     - test_env-named_multi
     - test_env-named_multi-to-single
-    - test_env_single
+    - test_env-named_multi_missing
     - test_env-with-prefix_all
     - test_env-with-prefix_multi
     - test_env-with-prefix_single
