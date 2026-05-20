@@ -87,6 +87,24 @@ jobs:
         assertEquals "$ERROR" 'invalid resultType: rt1'
 
     # =====================================================================
+    - name: '[act] (should fail): resultType "output" with argument'
+      id: input-error_resultType-output-with-arg
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'output:x'
+    - name: '[assert] (should fail): resultType "output-named" with argument'
+      env:
+        STATUS: ${{steps.input-error_resultType-output-with-arg.outcome}}
+        ERROR: ${{steps.input-error_resultType-output-with-arg.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid resultType output:x (non-empty argument)'
+
+    # =====================================================================
     - name: '[act] (should fail): resultType "output-named" without names'
       id: input-error_resultType-output-without-names
       continue-on-error: true
