@@ -1,4 +1,5 @@
 import java.io.BufferedWriter;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
@@ -487,7 +488,10 @@ class Util {
 			allProps.load(in);
 			return allProps;
 		} catch (IOException e) {
-			missingFileHandler.handleMissingFile(path, e.getMessage());
+			// Nice message (instead of catching FileNotFoundExeption which is also thrown on other problems and just contains the
+			// filename, not "does not exist" or similar):
+			String message = Files.exists(path) ? ("error opening file: " + e.getMessage()) : ("file " + path + " does not exist");
+			missingFileHandler.handleMissingFile(path, message);
 			return new Properties();
 		}
 	}

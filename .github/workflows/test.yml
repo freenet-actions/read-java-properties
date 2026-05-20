@@ -226,7 +226,7 @@ jobs:
         onMissingFile: error
         keys: ${{env.SELECTED_KEY}}
         resultType: json
-    - name: '[assert] (should fail): missing file with onMissingFile "error'
+    - name: '[assert] (should fail): missing file with onMissingFile "error"'
       env:
         STATUS: ${{steps.file-error_onMissingFile-error.outcome}}
         RESULT_JSON: ${{steps.file-error_onMissingFile-error.outputs.json}}
@@ -246,6 +246,7 @@ jobs:
         resultType: json
     - name: '[assert] (should fail): missing file with default onMissingFile'
       env:
+        STATUS: ${{steps.file-error_onMissingFile-default.outcome}}
         RESULT_JSON: ${{steps.file-error_onMissingFile-default.outputs.json}}
       run: *validateOnMissingFileErrorImpl
 
