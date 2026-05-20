@@ -12,179 +12,8 @@ env:
   SELECTED_NAME: 'my-prop'
   SELECTED_NAMES: 'java-version jvm_args unicode colon'
 
+  SHELL_SETUP: test/test-setup.sh
   NOT_FOUND_STATUS: 54
-  SHELL_SETUP: |-
-    debugPrintf() {
-      printf "$@" | sed 's/^/::debug::/g' >&2
-    }
-
-    # Reads stdin and replaces one linefeed at the end of the input with "¶". Exits with non-zero status if that LF is
-    # missing.
-    # Piping a command to this function works around the removal of trailing LFs in command substitution
-    # [https://stackoverflow.com/a/15184414] and preserves meaningful LFs.
-    # For example, when the command is `jq --raw-output …` and the result is a string with ends with LF, that LF is
-    # preserved, and the LF added by jq (like line-based commands generally do) is replaced.
-    # This enables precise comparisons.
-    replaceLastLF() {
-      perl -e '$/ = undef; $_ = <>; ($r = $_) =~ s{\n$}{}; die "missing trailing LF\n" if $r eq $_; printf "%s¶", $r'
-    }
-
-    assertVariableUnset() {
-      local varName=$1; shift
-      if [ "${!varName+defined}" = defined ]; then
-        printf 'assertion error: %s (== "%s") is set\n' "$varName" "${!varName}" >&2
-        return 1
-      else
-        printf 'ok: %s is not set\n' "$varName" >&2
-      fi
-    }
-    # test this function:
-    (
-      set +e
-      unset x;     assertVariableUnset x >&/dev/null; statusUnset=$?
-      x='';        assertVariableUnset x >&/dev/null; statusEmpty=$?
-      x=foo;       assertVariableUnset x >&/dev/null; statusNonEmpty1=$?
-      x=defined;   assertVariableUnset x >&/dev/null; statusNonEmpty2=$?
-      set -e
-      [ $statusUnset     -eq 0 ]
-      [ $statusEmpty     -ne 0 ]
-      [ $statusNonEmpty1 -ne 0 ]
-      [ $statusNonEmpty2 -ne 0 ]
-    )
-
-    assertEquals() {
-      debugPrintf 'assertEquals("%s", "%s")\n' "$1" "$2"
-      if [ "$1" = "$2" ]; then
-        printf 'ok: "%s" == "%s"\n' "$1" "$2" >&2
-      else
-        printf 'assertion error: "%s" != "%s"\n' "$1" "$2" >&2
-        return 1
-      fi
-    }
-
-    # The last argument is the expected result. All other arguments are treated as a command (with arguments)
-    # to be evaluated which outputs the actual result. Both results are then asserted to be equal.
-    #
-    # Also, unlike directly using the form
-    #   assertEquals "$(eval "$RESULT_GETTER 'key with spaces')" 'expected value'
-    # this function does not swallow a non-zero exit status in $RESULT_GETTER (but returns with that error
-    # status and skips the assertion).
-    #
-    # Of the arguments which form the command, only the first is evaled, the rest is treated literally.
-    # That odd behavior is useful for how the steps for similar test cases are written: They require
-    # different ways to get a result; for example, one needs `getJsonValue "$RESULT"` and another one
-    # `getJsonValue "$(<"$RESULT_FILE")`; this difference is moved to environment variables in order to keep
-    # the script identical, so it can be reused with a YAML anchor.
-    # Example usage: evalAndAssertEquals "$RESULT_GETTER" 'key with spaces' 'expected value'
-    # with RESULT_GETTER set to 'getJsonValue "$RESULT"'.
-    evalAndAssertEquals() {
-      local getterFunction=$1; shift
-      local args=("$@")
-      local expectedValue="${args[@]:${#args[@]}-1}"
-      args=("${args[@]:0:${#args[@]}-1}")
-
-      local quotedArgs value
-      quotedArgs=$(printf ' %q' "${args[@]}")
-
-      # Call $getterFunction once to check its status only before the call to capture its output.
-      # Otherwise, we'd get a misleading error from replaceLastLF if $getterFunction prints nothing and exits
-      # with $NOT_FOUND_STATUS.
-      eval "${getterFunction}${quotedArgs}" >/dev/null
-      eval "value=\$(set -o pipefail; ${getterFunction}${quotedArgs} | replaceLastLF)"
-
-      expectedValue="$(printf '%s\n' "$expectedValue" | replaceLastLF)"
-      assertEquals "$value" "$expectedValue"
-    }
-
-    # Queries a value by calling command $1 with the remaining args and expects it to exit with status $NOT_FOUND_STATUS.
-    # The command is handled like in →evalAndAssertEquals (except that there is no expected value as last argument which
-    # is not passed to the command).
-    evalAndAssertUndefined() {
-      local getterFunction=$1; shift
-      local quotedArgs value st
-      quotedArgs=$(printf ' %q' "$@")
-      if eval "value=\$(${getterFunction}${quotedArgs})"; then
-        printf 'assertion error: %s == "%s", expected undefined\n' "$*" "$value" >&2
-        return 1
-      elif [ ${st-$?} -eq "$NOT_FOUND_STATUS" ]; then
-        printf 'ok: %s is undefined\n' "$*" >&2
-      else
-        # no error message, assuming failed $getterFunction has already written one
-        return $st
-      fi
-    }
-
-    # Extracts the value for key $2 from JSON $1.
-    getJsonValue() {
-      local json=$1; shift
-      local key=$1; shift
-      debugPrintf 'getJsonValue("%s", "%s")\n' "$json" "$key"
-      jq --arg k "$key" --raw-output '
-          .[$k] as $v
-          | if $v != null then
-              $v
-          elif (keys | index($k) != null) then #contains key $k (with a null or false value)
-              ""
-          else
-              (("key " + $k + " not found\n") | halt_error(env.NOT_FOUND_STATUS | tonumber))
-          end' <<<"$json"
-    }
-
-    assertJsonDoesNotContainKey() {
-      assertJsonContainsKeyEquals "$@" false
-    }
-
-    assertJsonContainsKey() {
-      assertJsonContainsKeyEquals "$@" true
-    }
-
-    assertJsonContainsKeyEquals() {
-      local json=$1; shift
-      local key=$1; shift
-      local expected=$1; shift
-      debugPrintf 'assertJsonContainsKeyEquals("%s", "%s", "%s")\n' "$json" "$key" "$expected"
-      local contains
-      contains=$(jq --arg k "$key" --raw-output 'keys | index($k) != null' <<<"$json")
-      assertEquals "$contains" "$expected"
-    }
-
-    # Encodes a key $1 in the output-style encoding (property key to output name).
-    encodeKey() {
-      local key=$1; shift
-      perl -pe 's=((?!_)[[:punct:]])= sprintf("-%04X", ord($1)) =ge; s=^=_=;' <<<"$key"
-    }
-
-    # Extracts the value for key <output-style encoding of $2> from JSON $2.
-    encodeKeyAndGetJsonValue() {
-      local json=$1; shift
-      local key=$1; shift
-      local encodedKey
-      encodedKey=$(encodeKey "$key")
-      getJsonValue "$json" "$encodedKey" "$@"
-    }
-
-    # Prints the value of the environment variable set for key $1 (when not using a prefix).
-    getEnv() {
-      local key=$1; shift
-      debugPrintf 'getEnv("%s")\n' "$key"
-      local st
-      if printenv -- "$key"; then
-        : # OK
-      elif [ ${st-$?} -eq 1 ]; then
-        printf 'environment variable %s not set\n' "$key" >&2
-        return $NOT_FOUND_STATUS
-      else
-        # no error message, assuming printenv has already written one
-        return $st
-      fi
-    }
-
-    # Prints the value of the environment variable set for key $2 when using a prefix $1.
-    getEnvWithPrefix() {
-      local prefix=$1; shift
-      local key=$1; shift
-      getEnv "${prefix}${key}" "$@"
-    }
 
 jobs:
   #########################################################################
@@ -244,7 +73,7 @@ jobs:
         STATUS: ${{steps.input-error_resultType.outcome}}
         ERROR: ${{steps.input-error_resultType.outputs.error}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid resultType: rt1'
 
@@ -262,7 +91,7 @@ jobs:
         STATUS: ${{steps.input-error_resultType-output-without-names.outcome}}
         ERROR: ${{steps.input-error_resultType-output-without-names.outputs.error}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid resultType output-named: (missing argument)'
 
@@ -280,7 +109,7 @@ jobs:
         STATUS: ${{steps.input-error_resultType-env-without-names.outcome}}
         ERROR: ${{steps.input-error_resultType-env-without-names.outputs.error}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid resultType env-named: (missing argument)'
 
@@ -297,7 +126,7 @@ jobs:
         STATUS: ${{steps.input-error_resultType-output-without-keys.outcome}}
         ERROR: ${{steps.input-error_resultType-output-without-keys.outputs.error}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid use of resultType output-named (missing keys)'
 
@@ -314,7 +143,7 @@ jobs:
         STATUS: ${{steps.input-error_resultType-env-without-keys.outcome}}
         ERROR: ${{steps.input-error_resultType-env-without-keys.outputs.error}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$STATUS" failure
         assertEquals "$ERROR" 'invalid use of resultType env-named (missing keys)'
 
@@ -334,7 +163,7 @@ jobs:
       env:
         RESULT: ${{steps.default_single.outputs._sourceJavaVersion}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$RESULT" '21'
 
   test_output:
@@ -360,7 +189,7 @@ jobs:
         RESULT_DASHK:   ${{steps.output_multi_simple.outputs._dash-002Din-002DKey}}
         RESULT_UNI:     ${{steps.output_multi_simple.outputs._unicode_escapes}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$RESULT_SJV"     '21'
         assertEquals "$RESULT_JVMARGS" '-ea -showversion'
         assertEquals "$RESULT_COLONK"  'c'
@@ -379,7 +208,7 @@ jobs:
         RESULT_JSON: ${{toJSON(steps.output_all.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateAllImpl |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion   '21'
         evalAndAssertEquals "$RESULT_GETTER" targetJavaVersion   '17'
         evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs  '-ea -showversion'
@@ -413,7 +242,7 @@ jobs:
       env:
         RESULT_VALUE: ${{steps.output_all.outputs.value || 'U_N_S_E_T'}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" U_N_S_E_T
 
     # =====================================================================
@@ -430,7 +259,7 @@ jobs:
         RESULT_JSON: ${{toJSON(steps.output_multi.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateMultiImpl |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion  '21'
         evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
         evalAndAssertEquals "$RESULT_GETTER" colon:in:Key       'c'
@@ -466,7 +295,7 @@ jobs:
       env:
         RESULT_VALUE: ${{steps.output_multi.outputs.value}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" 'c' # from last key "colon:in:Key"
 
     # =====================================================================
@@ -516,7 +345,7 @@ jobs:
       env:
         RESULT_VALUE: ${{steps.output_multi2.outputs.value}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" 'a«,»c' # from last key "unicode_escapes"
 
     # =====================================================================
@@ -533,7 +362,7 @@ jobs:
         RESULT_JSON: ${{toJSON(steps.output_single.outputs)}}
         RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
       run: &validateSingleImpl |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_KEY" '21'
 
         evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
@@ -579,7 +408,7 @@ jobs:
         RESULT_VALUE: ${{steps.output_single_missing.outputs.value}}
         RESULT_JSON: ${{toJSON(steps.output_single_missing.outputs)}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
         assertEquals "$RESULT" ''
         assertEquals "$RESULT_VALUE" ''
@@ -602,7 +431,7 @@ jobs:
         RESULT_VALUE: ${{steps.output_multi_missing.outputs.value}}
         RESULT_JSON: ${{toJSON(steps.output_multi_missing.outputs)}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
         assertEquals "$RESULT1" ''
         assertEquals "$RESULT2" ''
@@ -632,7 +461,7 @@ jobs:
         # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: &validateMultiNamedImpl |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         evalAndAssertEquals "$RESULT_GETTER" java-version '21'
         evalAndAssertEquals "$RESULT_GETTER" jvm_args     '-ea -showversion'
         evalAndAssertEquals "$RESULT_GETTER" colon        'c'
@@ -652,7 +481,7 @@ jobs:
       env:
         RESULT_VALUE: ${{steps.output-named_multi.outputs.value || 'U_N_S_E_T'}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertEquals "$RESULT_VALUE" U_N_S_E_T
 
     # =====================================================================
@@ -700,7 +529,7 @@ jobs:
         # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
         RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
       run: &validateMultiNamed1Impl |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_NAME" 'c'
 
         # The outputs with the default names are not set:
@@ -726,7 +555,7 @@ jobs:
         RESULT: ${{steps.output-named_single_missing.outputs.my-prop}}
         RESULT_JSON: ${{toJSON(steps.output-named_single_missing.outputs)}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
         assertEquals "$RESULT" ''
         # Assert set:
@@ -745,7 +574,7 @@ jobs:
         RESULT: ${{steps.output-named_multi_missing.outputs.nonExistingKey1}}
         RESULT_JSON: ${{toJSON(steps.output-named_multi_missing.outputs)}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         # Like this, the expected empty value is not distinguishable from unset:
         assertEquals "$RESULT" ''
         # Assert set:
@@ -795,7 +624,7 @@ jobs:
       env:
         RESULT_JSON: ${{steps.json_multi_missing.outputs.json}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         resultGetter='getJsonValue "$RESULT_JSON"'
         evalAndAssertEquals "$resultGetter" sourceJavaVersion  '21'
         evalAndAssertEquals "$resultGetter" org.gradle.jvmargs '-ea -showversion'
@@ -889,7 +718,7 @@ jobs:
       env:
         JSON_OUTPUT_FILE: ${{steps.json-file_multi_missing_arrange.outputs.file}}
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         resultJson=$(<"$JSON_OUTPUT_FILE")
         resultGetter='getJsonValue "$resultJson"'
         evalAndAssertEquals "$resultGetter" sourceJavaVersion  '21'
@@ -949,7 +778,7 @@ jobs:
         resultType: env
     - name: '[assert] query multiple missing properties as environment variables'
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertVariableUnset "$SELECTED_NON_EX_KEY"
         assertVariableUnset "$SELECTED_NON_EX_KEY2"
         assertEquals "${!SELECTED_KEY}" '21'
@@ -1052,7 +881,7 @@ jobs:
         resultType: 'env-named:NE1 E1 NE2'
     - name: '[assert] query multiple missing properties as environment variables'
       run: |-
-        eval "$SHELL_SETUP"
+        . "$SHELL_SETUP"
         assertVariableUnset NE1
         assertVariableUnset NE2
         assertEquals "$E1" '21'
