@@ -135,7 +135,7 @@ assertJsonContainsKeyEquals() {
 # Encodes a key $1 in the output-style encoding (property key to output name).
 encodeKey() {
 	local key=$1; shift
-	perl -pe 's=((?!_)[[:space:][:punct:]])= sprintf("-%04X", ord($1)) =ge; s=^=_=;' <<<"$key"
+	perl -ple 's=((?!_)[[:space:][:punct:]])= sprintf("-%04X", ord($1)) =ge; s=^=_=;' <<<"$key"
 }
 
 # Extracts the value for key <output-style encoding of $2> from JSON $2.
