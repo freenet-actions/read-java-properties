@@ -176,6 +176,7 @@ enum ResultWriter {
 	OUTPUT(Ids.ResultWriterName.OUTPUT) {
 		@Override
 		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
+			config.requireNoArg();
 			String lastValue = null;
 			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
 				for (Map.Entry<String, Optional<String>> entry : props.entrySet()) {
