@@ -273,7 +273,7 @@ jobs:
       run: |-
         . "$SHELL_SETUP"
         assertEquals "$STATUS" failure
-        assertEquals "$ERROR" '. is a directory'
+        assertEquals "$ERROR" 'test is a directory'
 
     # =====================================================================
     - name: '[act] (should fail) invalid file format'
