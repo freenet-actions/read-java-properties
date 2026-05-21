@@ -186,7 +186,7 @@ jobs:
     - *checkoutStep
 
     # =====================================================================
-    - name: '[act] missing file with default onMissingFile "notice-message"'
+    - name: '[act] missing file with onMissingFile "notice-message"'
       id: missing-file-error_onMissingFile-notice-message
       uses: ./
       with:
@@ -202,7 +202,7 @@ jobs:
         assertEquals "$(getJsonValue "$RESULT_JSON" "$SELECTED_KEY")" ''
 
     # =====================================================================
-    - name: '[act] missing file with default onMissingFile "warning-message"'
+    - name: '[act] missing file with onMissingFile "warning-message"'
       id: missing-file-error_onMissingFile-warning-message
       uses: ./
       with:
@@ -218,7 +218,7 @@ jobs:
         assertEquals "$(getJsonValue "$RESULT_JSON" "$SELECTED_KEY")" ''
 
     # =====================================================================
-    - name: '[act] (should fail) missing file with default onMissingFile "error"'
+    - name: '[act] (should fail) missing file with onMissingFile "error"'
       id: missing-file-error_onMissingFile-error
       continue-on-error: true
       uses: ./
@@ -292,7 +292,7 @@ jobs:
       run: |-
         . "$SHELL_SETUP"
         assertEquals "$STATUS" failure
-        assertEquals "$ERROR" 'TODO parse error or something'
+        assertEquals "$ERROR" 'error in file test/resources/test-invalid.properties: Malformed \uxxxx encoding.'
 
   #########################################################################
   test_default:
