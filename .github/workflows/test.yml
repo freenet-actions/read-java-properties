@@ -23,6 +23,7 @@ jobs:
     needs:
     - test_invalid-usage
     - test_missing-file
+    - test_invalid-file
     - test_default
     - test_output
     - test_output-named
@@ -74,14 +75,14 @@ jobs:
     - *checkoutStep
 
     # =====================================================================
-    - name: '[act] (should fail): invalid input: resultType'
+    - name: '[act] (should fail) invalid input: resultType'
       id: input-error_resultType
       continue-on-error: true
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: rt1
-    - name: '[assert] (should fail): invalid input: resultType'
+    - name: '[assert] (should fail) invalid input: resultType'
       env:
         STATUS: ${{steps.input-error_resultType.outcome}}
         ERROR: ${{steps.input-error_resultType.outputs.error}}
@@ -91,7 +92,7 @@ jobs:
         assertEquals "$ERROR" 'invalid resultType: rt1'
 
     # =====================================================================
-    - name: '[act] (should fail): resultType "output" with argument'
+    - name: '[act] (should fail) resultType "output" with argument'
       id: input-error_resultType-output-with-arg
       continue-on-error: true
       uses: ./
@@ -99,7 +100,7 @@ jobs:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'output:x'
-    - name: '[assert] (should fail): resultType "output-named" with argument'
+    - name: '[assert] (should fail) resultType "output-named" with argument'
       env:
         STATUS: ${{steps.input-error_resultType-output-with-arg.outcome}}
         ERROR: ${{steps.input-error_resultType-output-with-arg.outputs.error}}
@@ -109,7 +110,7 @@ jobs:
         assertEquals "$ERROR" 'invalid resultType output:x (non-empty argument)'
 
     # =====================================================================
-    - name: '[act] (should fail): resultType "output-named" without names'
+    - name: '[act] (should fail) resultType "output-named" without names'
       id: input-error_resultType-output-without-names
       continue-on-error: true
       uses: ./
@@ -117,7 +118,7 @@ jobs:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'output-named:'
-    - name: '[assert] (should fail): resultType "output-named" without names'
+    - name: '[assert] (should fail) resultType "output-named" without names'
       env:
         STATUS: ${{steps.input-error_resultType-output-without-names.outcome}}
         ERROR: ${{steps.input-error_resultType-output-without-names.outputs.error}}
@@ -127,7 +128,7 @@ jobs:
         assertEquals "$ERROR" 'invalid resultType output-named: (missing argument)'
 
     # =====================================================================
-    - name: '[act] (should fail): resultType "env-named" without names'
+    - name: '[act] (should fail) resultType "env-named" without names'
       id: input-error_resultType-env-without-names
       continue-on-error: true
       uses: ./
@@ -135,7 +136,7 @@ jobs:
         file: test/resources/test.properties
         keys: '${{env.SELECTED_KEYS}}'
         resultType: 'env-named:'
-    - name: '[assert] (should fail): resultType "env-named" without names'
+    - name: '[assert] (should fail) resultType "env-named" without names'
       env:
         STATUS: ${{steps.input-error_resultType-env-without-names.outcome}}
         ERROR: ${{steps.input-error_resultType-env-without-names.outputs.error}}
@@ -145,14 +146,14 @@ jobs:
         assertEquals "$ERROR" 'invalid resultType env-named: (missing argument)'
 
     # =====================================================================
-    - name: '[act] (should fail): resultType "output-named" without keys'
+    - name: '[act] (should fail) resultType "output-named" without keys'
       id: input-error_resultType-output-without-keys
       continue-on-error: true
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: 'output-named:a b'
-    - name: '[assert] (should fail): resultType "output-named" without keys'
+    - name: '[assert] (should fail) resultType "output-named" without keys'
       env:
         STATUS: ${{steps.input-error_resultType-output-without-keys.outcome}}
         ERROR: ${{steps.input-error_resultType-output-without-keys.outputs.error}}
@@ -162,14 +163,14 @@ jobs:
         assertEquals "$ERROR" 'invalid use of resultType output-named (missing keys)'
 
     # =====================================================================
-    - name: '[act] (should fail): resultType "env-named" without keys'
+    - name: '[act] (should fail) resultType "env-named" without keys'
       id: input-error_resultType-env-without-keys
       continue-on-error: true
       uses: ./
       with:
         file: test/resources/test.properties
         resultType: 'env-named:a b'
-    - name: '[assert] (should fail): resultType "env-named" without keys'
+    - name: '[assert] (should fail) resultType "env-named" without keys'
       env:
         STATUS: ${{steps.input-error_resultType-env-without-keys.outcome}}
         ERROR: ${{steps.input-error_resultType-env-without-keys.outputs.error}}
@@ -186,7 +187,7 @@ jobs:
 
     # =====================================================================
     - name: '[act] missing file with default onMissingFile "notice-message"'
-      id: file-error_onMissingFile-notice-message
+      id: missing-file-error_onMissingFile-notice-message
       uses: ./
       with:
         file: test/resources/DOES_NOT_EXIST.properties
@@ -195,14 +196,14 @@ jobs:
         resultType: json
     - name: '[assert] missing file with onMissingFile "notice-message"'
       env:
-        RESULT_JSON: ${{steps.file-error_onMissingFile-notice-message.outputs.json}}
+        RESULT_JSON: ${{steps.missing-file-error_onMissingFile-notice-message.outputs.json}}
       run: |-
         . "$SHELL_SETUP"
         assertEquals "$(getJsonValue "$RESULT_JSON" "$SELECTED_KEY")" ''
 
     # =====================================================================
     - name: '[act] missing file with default onMissingFile "warning-message"'
-      id: file-error_onMissingFile-warning-message
+      id: missing-file-error_onMissingFile-warning-message
       uses: ./
       with:
         file: test/resources/DOES_NOT_EXIST.properties
@@ -211,14 +212,14 @@ jobs:
         resultType: json
     - name: '[assert] missing file with onMissingFile "warning-message"'
       env:
-        RESULT_JSON: ${{steps.file-error_onMissingFile-warning-message.outputs.json}}
+        RESULT_JSON: ${{steps.missing-file-error_onMissingFile-warning-message.outputs.json}}
       run: |-
         . "$SHELL_SETUP"
         assertEquals "$(getJsonValue "$RESULT_JSON" "$SELECTED_KEY")" ''
 
     # =====================================================================
-    - name: '[act] (should fail): missing file with default onMissingFile "error"'
-      id: file-error_onMissingFile-error
+    - name: '[act] (should fail) missing file with default onMissingFile "error"'
+      id: missing-file-error_onMissingFile-error
       continue-on-error: true
       uses: ./
       with:
@@ -226,29 +227,70 @@ jobs:
         onMissingFile: error
         keys: ${{env.SELECTED_KEY}}
         resultType: json
-    - name: '[assert] (should fail): missing file with onMissingFile "error"'
+    - name: '[assert] (should fail) missing file with onMissingFile "error"'
       env:
-        STATUS: ${{steps.file-error_onMissingFile-error.outcome}}
-        RESULT_JSON: ${{steps.file-error_onMissingFile-error.outputs.json}}
+        STATUS: ${{steps.missing-file-error_onMissingFile-error.outcome}}
+        RESULT_JSON: ${{steps.missing-file-error_onMissingFile-error.outputs.json}}
       run: &validateOnMissingFileErrorImpl |-
         . "$SHELL_SETUP"
         assertEquals "$STATUS" failure
         assertEquals "$RESULT_JSON" ''
 
     # =====================================================================
-    - name: '[act] (should fail): missing file with default onMissingFile'
-      id: file-error_onMissingFile-default
+    - name: '[act] (should fail) missing file with default onMissingFile'
+      id: missing-file-error_onMissingFile-default
       continue-on-error: true
       uses: ./
       with:
         file: test/resources/DOES_NOT_EXIST.properties
         keys: ${{env.SELECTED_KEY}}
         resultType: json
-    - name: '[assert] (should fail): missing file with default onMissingFile'
+    - name: '[assert] (should fail) missing file with default onMissingFile'
       env:
-        STATUS: ${{steps.file-error_onMissingFile-default.outcome}}
-        RESULT_JSON: ${{steps.file-error_onMissingFile-default.outputs.json}}
+        STATUS: ${{steps.missing-file-error_onMissingFile-default.outcome}}
+        RESULT_JSON: ${{steps.missing-file-error_onMissingFile-default.outputs.json}}
       run: *validateOnMissingFileErrorImpl
+
+  #########################################################################
+  test_invalid-file:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] (should fail) file is a directory'
+      id: invalid-file-error_directory
+      uses: ./
+      with:
+        file: test
+        onMissingFile: 'notice-message' # should fail with any onMissingFile, even the most lenient one
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] (should fail) file is a directory'
+      env:
+        STATUS: ${{steps.invalid-file-error_directory.outcome}}
+        ERROR: ${{steps.invalid-file-error_directory.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'TODO is a directory or something'
+
+    # =====================================================================
+    - name: '[act] (should fail) invalid file format'
+      id: invalid-file-error_format
+      uses: ./
+      with:
+        file: action.yml
+        onMissingFile: 'notice-message' # should fail with any onMissingFile, even the most lenient one
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] (should fail) invalid file format'
+      env:
+        STATUS: ${{steps.invalid-file-error_format.outcome}}
+        ERROR: ${{steps.invalid-file-error_format.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'TODO parse error or something'
 
   #########################################################################
   test_default:

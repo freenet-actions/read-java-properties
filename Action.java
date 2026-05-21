@@ -132,7 +132,7 @@ class IoRuntimeException extends RuntimeException {
 
 
 /**
- * An exception for which an "error" output should be set.
+ * An exception for which an {@link Ids.OutputName#ERROR} output should be set.
  */
 class OutputException extends RuntimeException {
 	public OutputException(String message, Throwable cause) {
@@ -203,10 +203,29 @@ record Config(MissingFileHandler missingFileHandler, Optional<List<String>> sele
 }
 
 
+enum GithubMessageType {
+	DEBUG("debug"), //
+	NOTICE("notice"), //
+	WARNING("warning"), //
+	ERROR("error");
+
+	public final String externalName;
+
+	private GithubMessageType(String externalName) {
+		this.externalName = externalName;
+	}
+
+	public void format(String message, Object... args) {
+		String format = String.format("::%s::" + message + "\n", externalName);
+		System.out.format(format, args);
+	}
+}
+
+
 enum MissingFileHandler {
-	NOTICE_MESSAGE(Ids.MissingFileHandlerName.NOTICE_MESSAGE, "notice"), //
-	WARNING_MESSAGE(Ids.MissingFileHandlerName.WARNING_MESSAGE, "warning"), //
-	ERROR(Ids.MissingFileHandlerName.ERROR, "error") {
+	NOTICE_MESSAGE(Ids.MissingFileHandlerName.NOTICE_MESSAGE, GithubMessageType.NOTICE), //
+	WARNING_MESSAGE(Ids.MissingFileHandlerName.WARNING_MESSAGE, GithubMessageType.WARNING), //
+	ERROR(Ids.MissingFileHandlerName.ERROR, GithubMessageType.ERROR) {
 		@Override
 		public void handleMissingFile(String message) {
 			super.handleMissingFile(message);
@@ -215,11 +234,11 @@ enum MissingFileHandler {
 	};
 
 	private final String externalName;
-	private final String output;
+	private final GithubMessageType githubMessageType;
 
-	private MissingFileHandler(Ids.MissingFileHandlerName externalName, String output) {
+	private MissingFileHandler(Ids.MissingFileHandlerName externalName, GithubMessageType githubMessageType) {
 		this.externalName = externalName.externalName;
-		this.output = output;
+		this.githubMessageType = githubMessageType;
 	}
 
 	public static MissingFileHandler ofExternalName(String externalName) {
@@ -235,7 +254,13 @@ enum MissingFileHandler {
 	// [https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-a-notice-message], so the \r
 	// might be considered part of the message.
 	public void handleMissingFile(String message) {
-		System.out.format("::%s::%s\n", output, message);
+		try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
+			writer.write(Ids.OutputName.ERROR, message);
+		} catch (IOException e) {
+			// This is an optional output. ⇒ don't throw
+			GithubMessageType.DEBUG.format("failed to set output %s = \"%s\"", Ids.OutputName.ERROR, message);
+		}
+		githubMessageType.format("%s", message);
 	}
 }
 
