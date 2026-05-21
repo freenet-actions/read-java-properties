@@ -259,6 +259,7 @@ jobs:
     # =====================================================================
     - name: '[act] (should fail) file is a directory'
       id: invalid-file-error_directory
+      continue-on-error: true
       uses: ./
       with:
         file: test
@@ -277,6 +278,7 @@ jobs:
     # =====================================================================
     - name: '[act] (should fail) invalid file format'
       id: invalid-file-error_format
+      continue-on-error: true
       uses: ./
       with:
         file: action.yml
