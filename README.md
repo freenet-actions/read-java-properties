@@ -2,7 +2,7 @@
 
 GitHub Action to read a Java .properties file and output one, multiple, or all properties as plain strings or JSON.
 
-## Usage example:
+## Usage examples:
 
 Suppose file gradle.properties contains properties `sourceJavaVersion= 21`, `targetJavaVersion= 17`, and `org.gradle.jvmargs= -ea -showversion`.
 
