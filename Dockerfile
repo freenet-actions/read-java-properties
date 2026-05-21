@@ -8,5 +8,12 @@ LABEL "maintainer"="Team MCBS Core <tp.sd.back.mcbs@freenet.ag>"
 
 WORKDIR /action
 COPY *.java .
-RUN ["javac", "Action.java"]
-ENTRYPOINT ["java", "--class-path", "/action", "Action"]
+RUN ["chmod", "a-wx", "Action.java"]
+
+# When re-building like this and using `java`, we may get an image with up-to-date Action.java,
+# but outdated *.class. Don't know how GitHub actions handles this exactly, but this would break
+# local Docker builds at least.
+# # RUN ["javac", "Action.java"]
+# # ENTRYPOINT ["java", "--class-path", "/action", "Action"]
+# So instead:
+ENTRYPOINT ["java", "Action.java"]
