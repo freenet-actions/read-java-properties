@@ -84,6 +84,7 @@ class Ids {
 	}
 
 	enum MissingFileHandlerName {
+		DEBUG_MESSAGE("debug-message"), //
 		NOTICE_MESSAGE("notice-message"), //
 		WARNING_MESSAGE("warning-message"), //
 		ERROR("error");
@@ -223,6 +224,7 @@ enum GithubMessageType {
 
 
 enum MissingFileHandler {
+	DEBUG_MESSAGE(Ids.MissingFileHandlerName.DEBUG_MESSAGE, GithubMessageType.DEBUG), //
 	NOTICE_MESSAGE(Ids.MissingFileHandlerName.NOTICE_MESSAGE, GithubMessageType.NOTICE), //
 	WARNING_MESSAGE(Ids.MissingFileHandlerName.WARNING_MESSAGE, GithubMessageType.WARNING), //
 	ERROR(Ids.MissingFileHandlerName.ERROR, GithubMessageType.ERROR) {
@@ -508,18 +510,21 @@ class Util {
 	public static Properties readProperties(String file, MissingFileHandler missingFileHandler) {
 		Properties allProps = new Properties();
 		Path path = Paths.get(file);
-		try (InputStream in = Files.newInputStream(path)) {
-			allProps.load(in);
-			return allProps;
-		} catch (IOException e) {
-			// Nice message (instead of catching FileNotFoundExeption which is also thrown on other problems and just contains the
-			// filename, not "does not exist" or similar):
-			String message = Files.isDirectory(path) ? (path + " is a directory") //
-			        : !Files.exists(path) ? ("file " + path + " does not exist") //
-			                : ("error opening file: " + e.getMessage());
-			missingFileHandler.handleMissingFile(message);
-			return new Properties();
+		if (!Files.exists(path)) {
+			missingFileHandler.handleMissingFile("file " + path + " does not exist");
+		} else if (Files.isDirectory(path)) {
+			MissingFileHandler.ERROR.handleMissingFile(path + " is a directory");
+		} else {
+			try (InputStream in = Files.newInputStream(path)) {
+				allProps.load(in);
+				return allProps;
+			} catch (IOException e) {
+				missingFileHandler.handleMissingFile("error opening file: " + e.getMessage());
+			} catch (Exception e) {
+				MissingFileHandler.ERROR.handleMissingFile("error opening file: " + e.getMessage());
+			}
 		}
+		return new Properties();
 	}
 
 	/**
