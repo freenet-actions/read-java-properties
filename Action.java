@@ -216,7 +216,7 @@ enum GithubMessageType {
 	}
 
 	public void format(String message, Object... args) {
-		String format = String.format("::%s::" + message + "\n", externalName);
+		String format = String.format("::%s::%s\n", externalName, message);
 		System.out.format(format, args);
 	}
 }
