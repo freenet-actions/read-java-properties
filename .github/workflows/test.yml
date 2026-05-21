@@ -281,7 +281,7 @@ jobs:
       continue-on-error: true
       uses: ./
       with:
-        file: action.yml
+        file: test/resources/test-invalid.properties
         onMissingFile: 'notice-message' # should fail with any onMissingFile, even the most lenient one
         keys: ${{env.SELECTED_KEY}}
         resultType: json

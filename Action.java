@@ -216,9 +216,9 @@ enum GithubMessageType {
 		this.externalName = externalName;
 	}
 
-	public void format(String message, Object... args) {
-		String format = String.format("::%s::%s\n", externalName, message);
-		System.out.format(format, args);
+	public void format(String format, Object... args) {
+		String formatWithPrefix = String.format("::%s::%s\n", externalName, format);
+		System.out.format(formatWithPrefix, args);
 	}
 }
 
@@ -260,7 +260,7 @@ enum MissingFileHandler {
 			writer.write(Ids.OutputName.ERROR, message);
 		} catch (IOException e) {
 			// This is an optional output. ⇒ don't throw
-			GithubMessageType.DEBUG.format("failed to set output %s = \"%s\"", Ids.OutputName.ERROR, message);
+			GithubMessageType.DEBUG.format("failed to set output %s = \"%s\": %s", Ids.OutputName.ERROR, message, e.toString());
 		}
 		githubMessageType.format("%s", message);
 	}
