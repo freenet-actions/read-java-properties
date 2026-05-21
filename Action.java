@@ -84,6 +84,7 @@ class Ids {
 	}
 
 	enum MissingFileHandlerName {
+		DEBUG_MESSAGE("debug-message"), //
 		NOTICE_MESSAGE("notice-message"), //
 		WARNING_MESSAGE("warning-message"), //
 		ERROR("error");
@@ -132,7 +133,7 @@ class IoRuntimeException extends RuntimeException {
 
 
 /**
- * An exception for which an "error" output should be set.
+ * An exception for which an {@link Ids.OutputName#ERROR} output should be set.
  */
 class OutputException extends RuntimeException {
 	public OutputException(String message, Throwable cause) {
@@ -203,23 +204,41 @@ record Config(MissingFileHandler missingFileHandler, Optional<List<String>> sele
 }
 
 
+enum GithubMessageType {
+	DEBUG("debug"), //
+	NOTICE("notice"), //
+	WARNING("warning"), //
+	ERROR("error");
+
+	public final String externalName;
+
+	private GithubMessageType(String externalName) {
+		this.externalName = externalName;
+	}
+
+	public void format(String format, Object... args) {
+		String formatWithPrefix = String.format("::%s::%s\n", externalName, format);
+		System.out.format(formatWithPrefix, args);
+	}
+}
+
+
 enum MissingFileHandler {
-	NOTICE_MESSAGE(Ids.MissingFileHandlerName.NOTICE_MESSAGE, "notice"), //
-	WARNING_MESSAGE(Ids.MissingFileHandlerName.WARNING_MESSAGE, "warning"), //
-	ERROR(Ids.MissingFileHandlerName.ERROR, "error") {
+	DEBUG_MESSAGE(Ids.MissingFileHandlerName.DEBUG_MESSAGE, GithubMessageType.DEBUG), //
+	NOTICE_MESSAGE(Ids.MissingFileHandlerName.NOTICE_MESSAGE, GithubMessageType.NOTICE), //
+	WARNING_MESSAGE(Ids.MissingFileHandlerName.WARNING_MESSAGE, GithubMessageType.WARNING), //
+	ERROR(Ids.MissingFileHandlerName.ERROR, GithubMessageType.ERROR) {
 		@Override
-		public void handleMissingFile(String message) {
-			super.handleMissingFile(message);
-			throw new ExitSilentlyException(2);
-		}
+		public void handleMissingFile(String messageFormat,
+		        Object... messageArgs) {super.handleMissingFile(messageFormat,messageArgs);throw new ExitSilentlyException(2);}
 	};
 
 	private final String externalName;
-	private final String output;
+	private final GithubMessageType githubMessageType;
 
-	private MissingFileHandler(Ids.MissingFileHandlerName externalName, String output) {
+	private MissingFileHandler(Ids.MissingFileHandlerName externalName, GithubMessageType githubMessageType) {
 		this.externalName = externalName.externalName;
-		this.output = output;
+		this.githubMessageType = githubMessageType;
 	}
 
 	public static MissingFileHandler ofExternalName(String externalName) {
@@ -234,8 +253,15 @@ enum MissingFileHandler {
 	@SuppressWarnings("java:S3457") // Sonar rule suggests %n instead of \n, but that would not strictly be covered by the docs
 	// [https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-a-notice-message], so the \r
 	// might be considered part of the message.
-	public void handleMissingFile(String message) {
-		System.out.format("::%s::%s\n", output, message);
+	public void handleMissingFile(String messageFormat, Object... messageArgs) {
+		String messageStr = String.format(messageFormat, messageArgs);
+		try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
+			writer.write(Ids.OutputName.ERROR, messageStr);
+		} catch (IOException e) {
+			// This is an optional output. ⇒ don't throw
+			GithubMessageType.DEBUG.format("failed to set output %s = \"%s\": %s", Ids.OutputName.ERROR, messageStr, e.toString());
+		}
+		githubMessageType.format(messageFormat, messageArgs);
 	}
 }
 
@@ -244,80 +270,38 @@ enum ResultWriter {
 	OUTPUT(Ids.ResultWriterName.OUTPUT) {
 		@Override
 		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
-			config.requireNoArg();
-			String lastValue = null;
-			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
-				for (Map.Entry<String, Optional<String>> entry : props.entrySet()) {
-					String key = encodeKey(config.outputPrefix() + entry.getKey());
-					lastValue = entry.getValue().orElse("");
-					writer.write(key, lastValue);
-				}
+			config.requireNoArg();String lastValue=null;try(GitHubVariableWriter writer=GitHubOutputFile.OUTPUT.open()){for(Map.Entry<String,Optional<String>>entry:props.entrySet()){String key=encodeKey(config.outputPrefix()+entry.getKey());lastValue=entry.getValue().orElse("");writer.write(key,lastValue);}
 
-				if (config.selectedKeys().isPresent()) {
-					writer.write(Ids.OutputName.VALUE, lastValue != null ? lastValue : "");
-				}
-			}
+	if(config.selectedKeys().isPresent()){writer.write(Ids.OutputName.VALUE,lastValue!=null?lastValue:"");}}
 		}
 
-		private static String encodeKey(String key) {
-			StringBuilder result = new StringBuilder(key.length() + 4);
-			Matcher matcher = Pattern.compile("([\\s\\p{Punct}&&[^_]])").matcher(key);
-			while (matcher.find()) {
-				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
-			}
-			matcher.appendTail(result);
-			return result.toString();
-		}
+		private static String encodeKey(
+		        String key) {StringBuilder result=new StringBuilder(key.length()+4);Matcher matcher=Pattern.compile("([\\s\\p{Punct}&&[^_]])").matcher(key);while(matcher.find()){matcher.appendReplacement(result,String.format("-%04X",(int)matcher.group(1).charAt(0)));}matcher.appendTail(result);return result.toString();}
 	},
 	OUTPUT_NAMED(Ids.ResultWriterName.OUTPUT_NAMED) {
 		@Override
-		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
-			writeNamedImpl(props, config, true, GitHubOutputFile.OUTPUT);
-		}
+		public void write(Map<String, Optional<String>> props, Config config)
+		        throws IOException {writeNamedImpl(props,config,true,GitHubOutputFile.OUTPUT);}
 	},
 	ENV_NAMED(Ids.ResultWriterName.ENV_NAMED) {
 		@Override
-		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
-			writeNamedImpl(props, config, false, GitHubOutputFile.ENV);
-		}
+		public void write(Map<String, Optional<String>> props, Config config)
+		        throws IOException {writeNamedImpl(props,config,false,GitHubOutputFile.ENV);}
 	},
 	ENV(Ids.ResultWriterName.ENV) {
 		@Override
-		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
-			String prefix = config.resultTypeArg();
-			try (GitHubVariableWriter writer = GitHubOutputFile.ENV.open()) {
-				for (Map.Entry<String, Optional<String>> entry : props.entrySet()) {
-					Optional<String> value = entry.getValue();
-					value.ifPresent(v -> writer.write(prefix + entry.getKey(), v));
-				}
-			}
-		}
+		public void write(Map<String, Optional<String>> props, Config config)
+		        throws IOException {String prefix=config.resultTypeArg();try(GitHubVariableWriter writer=GitHubOutputFile.ENV.open()){for(Map.Entry<String,Optional<String>>entry:props.entrySet()){Optional<String>value=entry.getValue();value.ifPresent(v->writer.write(prefix+entry.getKey(),v));}}}
 	},
 	JSON(Ids.ResultWriterName.JSON) {
 		@Override
-		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
-			config.requireNoArg();
-			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
-				writer.write(Ids.OutputName.JSON, Util.toJson(props).s());
-			}
-		}
+		public void write(Map<String, Optional<String>> props, Config config)
+		        throws IOException {config.requireNoArg();try(GitHubVariableWriter writer=GitHubOutputFile.OUTPUT.open()){writer.write(Ids.OutputName.JSON,Util.toJson(props).s());}}
 	},
 	JSON_FILE(Ids.ResultWriterName.JSON_FILE) {
 		@Override
-		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
-			String outputFile = config.requiredResultTypeArg();
-			Path parentDir = Paths.get(outputFile).getParent();
-			if (parentDir != null) {
-				Files.createDirectories(parentDir);
-			}
-			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-				StringIntPair jsonResult = Util.toJson(props);
-				System.err.format("writing JSON for %s properties to %s%n", jsonResult.i(), outputFile);
-				writer.write(jsonResult.s());
-				writer.write('\n');
-				writer.flush();
-			}
-		}
+		public void write(Map<String, Optional<String>> props, Config config)
+		        throws IOException {String outputFile=config.requiredResultTypeArg();Path parentDir=Paths.get(outputFile).getParent();if(parentDir!=null){Files.createDirectories(parentDir);}try(Writer writer=Util.openFile(outputFile,StandardOpenOption.CREATE,StandardOpenOption.TRUNCATE_EXISTING)){StringIntPair jsonResult=Util.toJson(props);System.err.format("writing JSON for %s properties to %s%n",jsonResult.i(),outputFile);writer.write(jsonResult.s());writer.write('\n');writer.flush();}}
 	};
 
 	private final String externalName;
@@ -483,16 +467,21 @@ class Util {
 	public static Properties readProperties(String file, MissingFileHandler missingFileHandler) {
 		Properties allProps = new Properties();
 		Path path = Paths.get(file);
-		try (InputStream in = Files.newInputStream(path)) {
-			allProps.load(in);
-			return allProps;
-		} catch (IOException e) {
-			// Nice message (instead of catching FileNotFoundExeption which is also thrown on other problems and just contains the
-			// filename, not "does not exist" or similar):
-			String message = Files.exists(path) ? ("error opening file: " + e.getMessage()) : ("file " + path + " does not exist");
-			missingFileHandler.handleMissingFile(message);
-			return new Properties();
+		if (!Files.exists(path)) {
+			missingFileHandler.handleMissingFile("file " + path + " does not exist");
+		} else if (Files.isDirectory(path)) {
+			MissingFileHandler.ERROR.handleMissingFile(path + " is a directory");
+		} else {
+			try (InputStream in = Files.newInputStream(path)) {
+				allProps.load(in);
+				return allProps;
+			} catch (IOException e) {
+				missingFileHandler.handleMissingFile("error opening file %s: %s", path, e.getMessage());
+			} catch (Exception e) { // e.g. IllegalArgumentException: "Malformed \\uxxxx encoding." on invalid contents
+				MissingFileHandler.ERROR.handleMissingFile("error in file %s: %s", path, e.getMessage());
+			}
 		}
+		return new Properties();
 	}
 
 	/**

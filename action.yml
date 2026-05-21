@@ -12,9 +12,13 @@ inputs:
     default: error
     description: |-
       What to do if `file` does not exist or is not readable. One of:
+      - "debug-message": write a debug message and continue with an empty properties map,
       - "notice-message": write a notice message and continue with an empty properties map,
       - "warning-message": write a warning message and continue with an empty properties map,
       - "error": write an error message and exit with non-zero status.
+      Note that these situations are always treated as an error:
+      - `file` is a directory,
+      - `file` is readable, but not in the correct format.
   keys:
     description: |-
       Selects the property keys (names). Format: `keySeparator`-separated list.
