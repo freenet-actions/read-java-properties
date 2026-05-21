@@ -514,7 +514,9 @@ class Util {
 		} catch (IOException e) {
 			// Nice message (instead of catching FileNotFoundExeption which is also thrown on other problems and just contains the
 			// filename, not "does not exist" or similar):
-			String message = Files.exists(path) ? ("error opening file: " + e.getMessage()) : ("file " + path + " does not exist");
+			String message = Files.isDirectory(path) ? (path + " is a directory") //
+			        : !Files.exists(path) ? ("file " + path + " does not exist") //
+			                : ("error opening file: " + e.getMessage());
 			missingFileHandler.handleMissingFile(message);
 			return new Properties();
 		}

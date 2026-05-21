@@ -272,7 +272,7 @@ jobs:
       run: |-
         . "$SHELL_SETUP"
         assertEquals "$STATUS" failure
-        assertEquals "$ERROR" 'TODO is a directory or something'
+        assertEquals "$ERROR" '. is a directory'
 
     # =====================================================================
     - name: '[act] (should fail) invalid file format'
