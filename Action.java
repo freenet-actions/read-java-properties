@@ -229,8 +229,10 @@ enum MissingFileHandler {
 	WARNING_MESSAGE(Ids.MissingFileHandlerName.WARNING_MESSAGE, GithubMessageType.WARNING), //
 	ERROR(Ids.MissingFileHandlerName.ERROR, GithubMessageType.ERROR) {
 		@Override
-		public void handleMissingFile(String messageFormat,
-		        Object... messageArgs) {super.handleMissingFile(messageFormat,messageArgs);throw new ExitSilentlyException(2);}
+		public void handleMissingFile(String messageFormat, Object... messageArgs) {
+			super.handleMissingFile(messageFormat, messageArgs);
+			throw new ExitSilentlyException(2);
+		}
 	};
 
 	private final String externalName;
@@ -270,38 +272,80 @@ enum ResultWriter {
 	OUTPUT(Ids.ResultWriterName.OUTPUT) {
 		@Override
 		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
-			config.requireNoArg();String lastValue=null;try(GitHubVariableWriter writer=GitHubOutputFile.OUTPUT.open()){for(Map.Entry<String,Optional<String>>entry:props.entrySet()){String key=encodeKey(config.outputPrefix()+entry.getKey());lastValue=entry.getValue().orElse("");writer.write(key,lastValue);}
+			config.requireNoArg();
+			String lastValue = null;
+			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
+				for (Map.Entry<String, Optional<String>> entry : props.entrySet()) {
+					String key = encodeKey(config.outputPrefix() + entry.getKey());
+					lastValue = entry.getValue().orElse("");
+					writer.write(key, lastValue);
+				}
 
-	if(config.selectedKeys().isPresent()){writer.write(Ids.OutputName.VALUE,lastValue!=null?lastValue:"");}}
+				if (config.selectedKeys().isPresent()) {
+					writer.write(Ids.OutputName.VALUE, lastValue != null ? lastValue : "");
+				}
+			}
 		}
 
-		private static String encodeKey(
-		        String key) {StringBuilder result=new StringBuilder(key.length()+4);Matcher matcher=Pattern.compile("([\\s\\p{Punct}&&[^_]])").matcher(key);while(matcher.find()){matcher.appendReplacement(result,String.format("-%04X",(int)matcher.group(1).charAt(0)));}matcher.appendTail(result);return result.toString();}
+		private static String encodeKey(String key) {
+			StringBuilder result = new StringBuilder(key.length() + 4);
+			Matcher matcher = Pattern.compile("([\\s\\p{Punct}&&[^_]])").matcher(key);
+			while (matcher.find()) {
+				matcher.appendReplacement(result, String.format("-%04X", (int) matcher.group(1).charAt(0)));
+			}
+			matcher.appendTail(result);
+			return result.toString();
+		}
 	},
 	OUTPUT_NAMED(Ids.ResultWriterName.OUTPUT_NAMED) {
 		@Override
-		public void write(Map<String, Optional<String>> props, Config config)
-		        throws IOException {writeNamedImpl(props,config,true,GitHubOutputFile.OUTPUT);}
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
+			writeNamedImpl(props, config, true, GitHubOutputFile.OUTPUT);
+		}
 	},
 	ENV_NAMED(Ids.ResultWriterName.ENV_NAMED) {
 		@Override
-		public void write(Map<String, Optional<String>> props, Config config)
-		        throws IOException {writeNamedImpl(props,config,false,GitHubOutputFile.ENV);}
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
+			writeNamedImpl(props, config, false, GitHubOutputFile.ENV);
+		}
 	},
 	ENV(Ids.ResultWriterName.ENV) {
 		@Override
-		public void write(Map<String, Optional<String>> props, Config config)
-		        throws IOException {String prefix=config.resultTypeArg();try(GitHubVariableWriter writer=GitHubOutputFile.ENV.open()){for(Map.Entry<String,Optional<String>>entry:props.entrySet()){Optional<String>value=entry.getValue();value.ifPresent(v->writer.write(prefix+entry.getKey(),v));}}}
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
+			String prefix = config.resultTypeArg();
+			try (GitHubVariableWriter writer = GitHubOutputFile.ENV.open()) {
+				for (Map.Entry<String, Optional<String>> entry : props.entrySet()) {
+					Optional<String> value = entry.getValue();
+					value.ifPresent(v -> writer.write(prefix + entry.getKey(), v));
+				}
+			}
+		}
 	},
 	JSON(Ids.ResultWriterName.JSON) {
 		@Override
-		public void write(Map<String, Optional<String>> props, Config config)
-		        throws IOException {config.requireNoArg();try(GitHubVariableWriter writer=GitHubOutputFile.OUTPUT.open()){writer.write(Ids.OutputName.JSON,Util.toJson(props).s());}}
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
+			config.requireNoArg();
+			try (GitHubVariableWriter writer = GitHubOutputFile.OUTPUT.open()) {
+				writer.write(Ids.OutputName.JSON, Util.toJson(props).s());
+			}
+		}
 	},
 	JSON_FILE(Ids.ResultWriterName.JSON_FILE) {
 		@Override
-		public void write(Map<String, Optional<String>> props, Config config)
-		        throws IOException {String outputFile=config.requiredResultTypeArg();Path parentDir=Paths.get(outputFile).getParent();if(parentDir!=null){Files.createDirectories(parentDir);}try(Writer writer=Util.openFile(outputFile,StandardOpenOption.CREATE,StandardOpenOption.TRUNCATE_EXISTING)){StringIntPair jsonResult=Util.toJson(props);System.err.format("writing JSON for %s properties to %s%n",jsonResult.i(),outputFile);writer.write(jsonResult.s());writer.write('\n');writer.flush();}}
+		public void write(Map<String, Optional<String>> props, Config config) throws IOException {
+			String outputFile = config.requiredResultTypeArg();
+			Path parentDir = Paths.get(outputFile).getParent();
+			if (parentDir != null) {
+				Files.createDirectories(parentDir);
+			}
+			try (Writer writer = Util.openFile(outputFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+				StringIntPair jsonResult = Util.toJson(props);
+				System.err.format("writing JSON for %s properties to %s%n", jsonResult.i(), outputFile);
+				writer.write(jsonResult.s());
+				writer.write('\n');
+				writer.flush();
+			}
+		}
 	};
 
 	private final String externalName;
