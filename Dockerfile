@@ -1,4 +1,4 @@
-FROM azul/zulu-openjdk:25.0.2-25.32@sha256:634efad18fb8fbf1dcc4c2d5a43c663435a77f078a912345f23f332e7abd27be
+FROM azul/zulu-openjdk:26.0.1-26.30@sha256:07386924c002a50edac06043218cfc95370d4e57bbcf94149dc89a9a6739e2b5
 
 LABEL "com.github.actions.name"="read Java properties"
 LABEL "com.github.actions.description"="read Java properties file and return one or more as property values as plain text or JSON"
