@@ -1,14 +1,1053 @@
 name: Test
 on: pull_request
+defaults:
+  run:
+    shell: bash
+env:
+  SELECTED_KEY: 'sourceJavaVersion'
+  SELECTED_KEYS: 'sourceJavaVersion org.gradle.jvmargs unicode_escapes colon:in:Key'
+  SELECTED_KEYS_OTHER_ORDER: 'colon:in:Key sourceJavaVersion org.gradle.jvmargs unicode_escapes'
+  SELECTED_NON_EX_KEY: 'nonExistingKey1'
+  SELECTED_NON_EX_KEY2: 'nonExistingKey2'
+  SELECTED_NAME: 'my-prop'
+  SELECTED_NAMES: 'java-version jvm_args unicode colon'
+
+  SHELL_SETUP: test/test-setup.sh
+  NOT_FOUND_STATUS: 54
 
 jobs:
+  #########################################################################
+  # Similar to [https://github.com/orgs/community/discussions/12395#discussioncomment-12970019], this
+  # aggregates all job states, so that we need only this job as a status check in the GitHub repository settings.
   test:
-    runs-on: ubuntu
-    defaults:
-      run:
-        shell: bash
+    needs:
+    - test_invalid-usage
+    - test_missing-file
+    - test_invalid-file
+    - test_default
+    - test_output
+    - test_output-named
+    - test_json
+    - test_json-file
+    - test_env_all
+    - test_env_multi
+    - test_env_multi_missing
+    - test_env_single
+    - test_env-named_multi
+    - test_env-named_multi-to-single
+    - test_env-named_multi_missing
+    - test_env-with-prefix_all
+    - test_env-with-prefix_multi
+    - test_env-with-prefix_single
+    if: always()
+    runs-on: ubuntu-latest
     steps:
-
-    - name: 'validate "test (should fail): invalid input: resultType"'
+    - &checkoutStep
+      name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        ref: ${{ github.head_ref }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: "check that this job's `needs` is set to exactly all other jobs"
+      env:
+        THIS_WORKFLOW_FILE: '.github/workflows/test.yml'
+        THIS_JOB_NAME: test
       run: |-
-        [ '${{steps.error-input-resultType.outcome}}' = failure ]
+        diff --minimal --report-identical-files \
+          <(yq -r '.jobs | keys() | .[]' <"$THIS_WORKFLOW_FILE" | sort | grep --line-regexp --fixed-strings --invert-match -- "$THIS_JOB_NAME") \
+          <(yq -r '.jobs.test.needs[]'   <"$THIS_WORKFLOW_FILE" | sort)
+
+    - name: check overall status
+      env:
+        JOBS_TO_CHECK_JSON: ${{toJSON(needs)}}
+      run: |-
+        printf '$JOBS_TO_CHECK_JSON == "%s"\n' "$JOBS_TO_CHECK_JSON" >&2
+        jq --raw-output '
+            [to_entries[] | select(.value.result != "success")]
+            | map((.key + " has status " + (.value.result//"null") + "\n") | halt_error(1))[]
+        ' <<<"$JOBS_TO_CHECK_JSON"
+
+  #########################################################################
+  test_invalid-usage:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+
+    # =====================================================================
+    - name: '[act] (should fail) invalid input: resultType'
+      id: input-error_resultType
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: rt1
+    - name: '[assert] (should fail) invalid input: resultType'
+      env:
+        STATUS: ${{steps.input-error_resultType.outcome}}
+        ERROR: ${{steps.input-error_resultType.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid resultType: rt1'
+
+    # =====================================================================
+    - name: '[act] (should fail) resultType "output" with argument'
+      id: input-error_resultType-output-with-arg
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'output:x'
+    - name: '[assert] (should fail) resultType "output-named" with argument'
+      env:
+        STATUS: ${{steps.input-error_resultType-output-with-arg.outcome}}
+        ERROR: ${{steps.input-error_resultType-output-with-arg.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid resultType output:x (non-empty argument)'
+
+    # =====================================================================
+    - name: '[act] (should fail) resultType "output-named" without names'
+      id: input-error_resultType-output-without-names
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'output-named:'
+    - name: '[assert] (should fail) resultType "output-named" without names'
+      env:
+        STATUS: ${{steps.input-error_resultType-output-without-names.outcome}}
+        ERROR: ${{steps.input-error_resultType-output-without-names.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid resultType output-named: (missing argument)'
+
+    # =====================================================================
+    - name: '[act] (should fail) resultType "env-named" without names'
+      id: input-error_resultType-env-without-names
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'env-named:'
+    - name: '[assert] (should fail) resultType "env-named" without names'
+      env:
+        STATUS: ${{steps.input-error_resultType-env-without-names.outcome}}
+        ERROR: ${{steps.input-error_resultType-env-without-names.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid resultType env-named: (missing argument)'
+
+    # =====================================================================
+    - name: '[act] (should fail) resultType "output-named" without keys'
+      id: input-error_resultType-output-without-keys
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: 'output-named:a b'
+    - name: '[assert] (should fail) resultType "output-named" without keys'
+      env:
+        STATUS: ${{steps.input-error_resultType-output-without-keys.outcome}}
+        ERROR: ${{steps.input-error_resultType-output-without-keys.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid use of resultType output-named (missing keys)'
+
+    # =====================================================================
+    - name: '[act] (should fail) resultType "env-named" without keys'
+      id: input-error_resultType-env-without-keys
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: 'env-named:a b'
+    - name: '[assert] (should fail) resultType "env-named" without keys'
+      env:
+        STATUS: ${{steps.input-error_resultType-env-without-keys.outcome}}
+        ERROR: ${{steps.input-error_resultType-env-without-keys.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'invalid use of resultType env-named (missing keys)'
+
+  #########################################################################
+  test_missing-file:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+
+    # =====================================================================
+    - name: '[act] missing file with onMissingFile "notice-message"'
+      id: missing-file-error_onMissingFile-notice-message
+      uses: ./
+      with:
+        file: test/resources/DOES_NOT_EXIST.properties
+        onMissingFile: notice-message
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] missing file with onMissingFile "notice-message"'
+      env:
+        RESULT_JSON: ${{steps.missing-file-error_onMissingFile-notice-message.outputs.json}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$(getJsonValue "$RESULT_JSON" "$SELECTED_KEY")" ''
+
+    # =====================================================================
+    - name: '[act] missing file with onMissingFile "warning-message"'
+      id: missing-file-error_onMissingFile-warning-message
+      uses: ./
+      with:
+        file: test/resources/DOES_NOT_EXIST.properties
+        onMissingFile: warning-message
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] missing file with onMissingFile "warning-message"'
+      env:
+        RESULT_JSON: ${{steps.missing-file-error_onMissingFile-warning-message.outputs.json}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$(getJsonValue "$RESULT_JSON" "$SELECTED_KEY")" ''
+
+    # =====================================================================
+    - name: '[act] (should fail) missing file with onMissingFile "error"'
+      id: missing-file-error_onMissingFile-error
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/DOES_NOT_EXIST.properties
+        onMissingFile: error
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] (should fail) missing file with onMissingFile "error"'
+      env:
+        STATUS: ${{steps.missing-file-error_onMissingFile-error.outcome}}
+        RESULT_JSON: ${{steps.missing-file-error_onMissingFile-error.outputs.json}}
+      run: &validateOnMissingFileErrorImpl |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$RESULT_JSON" ''
+
+    # =====================================================================
+    - name: '[act] (should fail) missing file with default onMissingFile'
+      id: missing-file-error_onMissingFile-default
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/DOES_NOT_EXIST.properties
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] (should fail) missing file with default onMissingFile'
+      env:
+        STATUS: ${{steps.missing-file-error_onMissingFile-default.outcome}}
+        RESULT_JSON: ${{steps.missing-file-error_onMissingFile-default.outputs.json}}
+      run: *validateOnMissingFileErrorImpl
+
+  #########################################################################
+  test_invalid-file:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] (should fail) file is a directory'
+      id: invalid-file-error_directory
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test
+        onMissingFile: 'notice-message' # should fail with any onMissingFile, even the most lenient one
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] (should fail) file is a directory'
+      env:
+        STATUS: ${{steps.invalid-file-error_directory.outcome}}
+        ERROR: ${{steps.invalid-file-error_directory.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'test is a directory'
+
+    # =====================================================================
+    - name: '[act] (should fail) invalid file format'
+      id: invalid-file-error_format
+      continue-on-error: true
+      uses: ./
+      with:
+        file: test/resources/test-invalid.properties
+        onMissingFile: 'notice-message' # should fail with any onMissingFile, even the most lenient one
+        keys: ${{env.SELECTED_KEY}}
+        resultType: json
+    - name: '[assert] (should fail) invalid file format'
+      env:
+        STATUS: ${{steps.invalid-file-error_format.outcome}}
+        ERROR: ${{steps.invalid-file-error_format.outputs.error}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$STATUS" failure
+        assertEquals "$ERROR" 'error in file test/resources/test-invalid.properties: Malformed \uxxxx encoding.'
+
+  #########################################################################
+  test_default:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query single property with default resultType'
+      id: default_single
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: sourceJavaVersion
+    - name: '[assert] query single property with default resultType'
+      env:
+        RESULT: ${{steps.default_single.outputs._sourceJavaVersion}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$RESULT" '21'
+
+  test_output:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    # This tests a subset of test case multi-output, but with hard-coded encoding from property key to output
+    # name (instead of re-implemented).
+    # It also demonstrates how you'd usually use outputs with one environment variable per output.
+    - name: '[act] query multiple properties as action outputs (simple)'
+      id: output_multi_simple
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keySeparator: ', '
+        keys: 'sourceJavaVersion, org.gradle.jvmargs, space in Key, dash-in-Key'
+        resultType: output
+    - name: '[assert] query multiple properties as action outputs (simple)'
+      env:
+        RESULT_SJV:     ${{steps.output_multi_simple.outputs._sourceJavaVersion}}
+        RESULT_JVMARGS: ${{steps.output_multi_simple.outputs._org-002Egradle-002Ejvmargs}}
+        RESULT_SPACEK:  ${{steps.output_multi_simple.outputs._space-0020in-0020Key}}
+        RESULT_DASHK:   ${{steps.output_multi_simple.outputs._dash-002Din-002DKey}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$RESULT_SJV"     '21'
+        assertEquals "$RESULT_JVMARGS" '-ea -showversion'
+        assertEquals "$RESULT_SPACEK"  'sp'
+        assertEquals "$RESULT_DASHK"   'd'
+
+    # =====================================================================
+    - name: '[act] query all properties as action outputs'
+      id: output_all
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: output
+    - name: '[assert] query all properties as action outputs'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output_all.outputs)}}
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
+      run: &validateAllImpl |-
+        . "$SHELL_SETUP"
+        evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion   '21'
+        evalAndAssertEquals "$RESULT_GETTER" targetJavaVersion   '17'
+        evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs  '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" 'space in Key'      'sp'
+        evalAndAssertEquals "$RESULT_GETTER" colon:in:Key        'c'
+        evalAndAssertEquals "$RESULT_GETTER" colonInValue        'cv:'
+        evalAndAssertEquals "$RESULT_GETTER" 'back\slash'        'back\slash\value'
+        evalAndAssertEquals "$RESULT_GETTER" dash-in-Key         'd'
+        evalAndAssertEquals "$RESULT_GETTER" dashInValue         'd-'
+        evalAndAssertEquals "$RESULT_GETTER" empty               ''
+        evalAndAssertEquals "$RESULT_GETTER" null                'null'
+        evalAndAssertEquals "$RESULT_GETTER" unicode_escapes     'a«,»c'
+        evalAndAssertEquals "$RESULT_GETTER" whitespace_escapes  $'A\tB\fC C\r\n\nD'
+        evalAndAssertEquals "$RESULT_GETTER" trailing_linefeed_1 $'one trailing LF\n'
+        evalAndAssertEquals "$RESULT_GETTER" trailing_linefeed_2 $'two trailing LFs\n\n'
+        evalAndAssertEquals "$RESULT_GETTER" dash_1              '-'
+        evalAndAssertEquals "$RESULT_GETTER" dash_2              '--'
+        evalAndAssertEquals "$RESULT_GETTER" dash_3              '---'
+        evalAndAssertEquals "$RESULT_GETTER" dash_4              '----'
+        evalAndAssertEquals "$RESULT_GETTER" dash_5              '-----'
+        evalAndAssertEquals "$RESULT_GETTER" dash_6              '------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_7              '-------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_8              '--------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_9              '---------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_10             '----------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_11             '-----------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_12             '------------'
+        evalAndAssertEquals "$RESULT_GETTER" dash_3_4_1          $'---\n----\n-'
+        evalAndAssertEquals "$RESULT_GETTER" dash_3_4_1_4_2      $'---\n----\n-\n----\n--'
+        evalAndAssertEquals "$RESULT_GETTER" dash_3_4_8_1        $'---\n----\n--------\n-'
+    - name: '[assert] query all properties as action outputs (additional "value" output not set)'
+      env:
+        RESULT_VALUE: ${{steps.output_all.outputs.value || 'U_N_S_E_T'}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$RESULT_VALUE" U_N_S_E_T
+
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs'
+      id: output_multi
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: output
+
+    - name: '[assert] query multiple properties as action outputs'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output_multi.outputs)}}
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
+      run: &validateMultiImpl |-
+        . "$SHELL_SETUP"
+        evalAndAssertEquals "$RESULT_GETTER" sourceJavaVersion  '21'
+        evalAndAssertEquals "$RESULT_GETTER" org.gradle.jvmargs '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" colon:in:Key       'c'
+        evalAndAssertEquals "$RESULT_GETTER" unicode_escapes    'a«,»c'
+
+        evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
+        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" 'back\slash'
+        evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
+        evalAndAssertUndefined "$RESULT_GETTER" dashInValue
+        evalAndAssertUndefined "$RESULT_GETTER" empty
+        evalAndAssertUndefined "$RESULT_GETTER" null
+        evalAndAssertUndefined "$RESULT_GETTER" whitespace_escapes
+        evalAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_1
+        evalAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_2
+        evalAndAssertUndefined "$RESULT_GETTER" dash_1
+        evalAndAssertUndefined "$RESULT_GETTER" dash_2
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3
+        evalAndAssertUndefined "$RESULT_GETTER" dash_4
+        evalAndAssertUndefined "$RESULT_GETTER" dash_5
+        evalAndAssertUndefined "$RESULT_GETTER" dash_6
+        evalAndAssertUndefined "$RESULT_GETTER" dash_7
+        evalAndAssertUndefined "$RESULT_GETTER" dash_8
+        evalAndAssertUndefined "$RESULT_GETTER" dash_9
+        evalAndAssertUndefined "$RESULT_GETTER" dash_10
+        evalAndAssertUndefined "$RESULT_GETTER" dash_11
+        evalAndAssertUndefined "$RESULT_GETTER" dash_12
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1_4_2
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
+
+    - name: '[assert] query multiple properties as action outputs (additional "value" output)'
+      env:
+        RESULT_VALUE: ${{steps.output_multi.outputs.value}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$RESULT_VALUE" 'c' # from last key "colon:in:Key"
+
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs (different keySeparator)'
+      id: output_multi_keySeparator
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keySeparator: '?' # something with a special meaning in regex; should be treated as literal
+        keys: 'sourceJavaVersion?org.gradle.jvmargs?unicode_escapes?colon:in:Key'
+        resultType: output
+    - name: '[assert] query multiple properties as action outputs (different keySeparator)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output_multi_keySeparator.outputs)}}
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
+      run: *validateMultiImpl
+
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs (different multi-char keySeparator)'
+      id: output_multi_keySeparatorMC
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keySeparator: ':/ '
+        keys: 'sourceJavaVersion:/ org.gradle.jvmargs:/ unicode_escapes:/ colon:in:Key'
+        resultType: output
+    - name: '[assert] query multiple properties as action outputs (different multi-char keySeparator)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output_multi_keySeparatorMC.outputs)}}
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
+      run: *validateMultiImpl
+
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs (in another keys order)'
+      id: output_multi2
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS_OTHER_ORDER}}'
+        resultType: output
+    - name: '[assert] query multiple properties as action outputs (in another keys order)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output_multi2.outputs)}}
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
+      run: *validateMultiImpl
+    - name: '[assert] query multiple properties as action outputs (in another keys order) (additional "value" output)'
+      env:
+        RESULT_VALUE: ${{steps.output_multi2.outputs.value}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$RESULT_VALUE" 'a«,»c' # from last key "unicode_escapes"
+
+    # =====================================================================
+    - name: '[act] query single property as action output'
+      id: output_single
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEY}}'
+        resultType: output
+
+    - name: '[assert] query single property as action output'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output_single.outputs)}}
+        RESULT_GETTER: 'encodeKeyAndGetJsonValue "$RESULT_JSON"'
+      run: &validateSingleImpl |-
+        . "$SHELL_SETUP"
+        evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_KEY" '21'
+
+        evalAndAssertUndefined "$RESULT_GETTER" targetJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
+        evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
+        evalAndAssertUndefined "$RESULT_GETTER" 'space in Key'
+        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" 'back\slash'
+        evalAndAssertUndefined "$RESULT_GETTER" dash-in-Key
+        evalAndAssertUndefined "$RESULT_GETTER" dashInValue
+        evalAndAssertUndefined "$RESULT_GETTER" empty
+        evalAndAssertUndefined "$RESULT_GETTER" null
+        evalAndAssertUndefined "$RESULT_GETTER" whitespace_escapes
+        evalAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_1
+        evalAndAssertUndefined "$RESULT_GETTER" trailing_linefeed_2
+        evalAndAssertUndefined "$RESULT_GETTER" unicode_escapes
+        evalAndAssertUndefined "$RESULT_GETTER" dash_1
+        evalAndAssertUndefined "$RESULT_GETTER" dash_2
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3
+        evalAndAssertUndefined "$RESULT_GETTER" dash_4
+        evalAndAssertUndefined "$RESULT_GETTER" dash_5
+        evalAndAssertUndefined "$RESULT_GETTER" dash_6
+        evalAndAssertUndefined "$RESULT_GETTER" dash_7
+        evalAndAssertUndefined "$RESULT_GETTER" dash_8
+        evalAndAssertUndefined "$RESULT_GETTER" dash_9
+        evalAndAssertUndefined "$RESULT_GETTER" dash_10
+        evalAndAssertUndefined "$RESULT_GETTER" dash_11
+        evalAndAssertUndefined "$RESULT_GETTER" dash_12
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_1_4_2
+        evalAndAssertUndefined "$RESULT_GETTER" dash_3_4_8_1
+
+    # =====================================================================
+    - name: '[act] query single missing property as action output'
+      id: output_single_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: ${{env.SELECTED_NON_EX_KEY}}
+        resultType: output
+    - name: '[assert] query single missing property as action output'
+      env:
+        RESULT: ${{steps.output_single_missing.outputs._nonExistingKey1}}
+        RESULT_VALUE: ${{steps.output_single_missing.outputs.value}}
+        RESULT_JSON: ${{toJSON(steps.output_single_missing.outputs)}}
+      run: |-
+        . "$SHELL_SETUP"
+        # Like this, the expected empty value is not distinguishable from unset:
+        assertEquals "$RESULT" ''
+        assertEquals "$RESULT_VALUE" ''
+        # Assert set:
+        assertJsonContainsKey "$RESULT_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY")"
+        assertJsonContainsKey "$RESULT_JSON" value
+
+    # =====================================================================
+    - name: '[act] query multiple missing properties as action outputs'
+      id: output_multi_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: output
+    - name: '[assert] query multiple missing properties as action outputs'
+      env:
+        RESULT1: ${{steps.output_multi_missing.outputs._nonExistingKey1}}
+        RESULT2: ${{steps.output_multi_missing.outputs._nonExistingKey2}}
+        RESULT_VALUE: ${{steps.output_multi_missing.outputs.value}}
+        RESULT_JSON: ${{toJSON(steps.output_multi_missing.outputs)}}
+      run: |-
+        . "$SHELL_SETUP"
+        # Like this, the expected empty value is not distinguishable from unset:
+        assertEquals "$RESULT1" ''
+        assertEquals "$RESULT2" ''
+        assertEquals "$RESULT_VALUE" ''
+        # Assert set:
+        assertJsonContainsKey "$RESULT_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY")"
+        assertJsonContainsKey "$RESULT_JSON" "$(encodeKey "$SELECTED_NON_EX_KEY2")"
+        assertJsonContainsKey "$RESULT_JSON" value
+
+  #########################################################################
+  test_output-named:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs of given names'
+      id: output-named_multi
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'output-named:${{env.SELECTED_NAMES}}'
+
+    - name: '[assert] query multiple properties as action outputs of given names'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output-named_multi.outputs)}}
+        # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: &validateMultiNamedImpl |-
+        . "$SHELL_SETUP"
+        evalAndAssertEquals "$RESULT_GETTER" java-version '21'
+        evalAndAssertEquals "$RESULT_GETTER" jvm_args     '-ea -showversion'
+        evalAndAssertEquals "$RESULT_GETTER" colon        'c'
+        evalAndAssertEquals "$RESULT_GETTER" unicode      'a«,»c'
+
+        # The outputs with the default names are not set:
+        evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
+        evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
+        evalAndAssertUndefined "$RESULT_GETTER" unicode_escapes
+
+        # Outputs for non-selected keys are not set, for example:
+        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" dash_1
+
+    - name: '[assert] query multiple properties as action outputs (additional "value" output not set)'
+      env:
+        RESULT_VALUE: ${{steps.output-named_multi.outputs.value || 'U_N_S_E_T'}}
+      run: |-
+        . "$SHELL_SETUP"
+        assertEquals "$RESULT_VALUE" U_N_S_E_T
+
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs of given names (different resultNameSeparator)'
+      id: output-named_multi_resultNameSeparator
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultNameSeparator: '?' # something with a special meaning in regex; should be treated as literal
+        resultType: 'output-named:java-version?jvm_args?unicode?colon'
+    - name: '[assert] query multiple properties as action outputs of given names (different resultNameSeparator)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output-named_multi_resultNameSeparator.outputs)}}
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: *validateMultiNamedImpl
+
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs of given names (different multi-char resultNameSeparator)'
+      id: output-named_multi_resultNameSeparatorMC
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultNameSeparator: '- -'
+        resultType: 'output-named:java-version- -jvm_args- -unicode- -colon'
+    - name: '[assert] query multiple properties as action outputs of given names (different multi-char resultNameSeparator)'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output-named_multi_resultNameSeparatorMC.outputs)}}
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: *validateMultiNamedImpl
+
+    # =====================================================================
+    - name: '[act] query multiple properties as action outputs of given name'
+      id: output-named_multi-to-single
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'output-named:${{env.SELECTED_NAME}}'
+
+    - name: '[assert] query multiple properties as action outputs of given name'
+      env:
+        RESULT_JSON: ${{toJSON(steps.output-named_multi-to-single.outputs)}}
+        # Output names specified as input are not subject to encoding (prefix "_", replace punctuation except "_"):
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: &validateMultiNamed1Impl |-
+        . "$SHELL_SETUP"
+        evalAndAssertEquals "$RESULT_GETTER" "$SELECTED_NAME" 'c'
+
+        # The outputs with the default names are not set:
+        evalAndAssertUndefined "$RESULT_GETTER" sourceJavaVersion
+        evalAndAssertUndefined "$RESULT_GETTER" org.gradle.jvmargs
+        evalAndAssertUndefined "$RESULT_GETTER" colon:in:Key
+        evalAndAssertUndefined "$RESULT_GETTER" unicode_escapes
+
+        # Outputs for non-selected keys are not set, for example:
+        evalAndAssertUndefined "$RESULT_GETTER" colonInValue
+        evalAndAssertUndefined "$RESULT_GETTER" dash_1
+
+    # =====================================================================
+    - name: '[act] query single missing property as action output of given name'
+      id: output-named_single_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: ${{env.SELECTED_NON_EX_KEY}}
+        resultType: 'output-named:${{env.SELECTED_NAME}}'
+    - name: '[assert] query single missing property as action output of given name'
+      env:
+        RESULT: ${{steps.output-named_single_missing.outputs.my-prop}}
+        RESULT_JSON: ${{toJSON(steps.output-named_single_missing.outputs)}}
+      run: |-
+        . "$SHELL_SETUP"
+        # Like this, the expected empty value is not distinguishable from unset:
+        assertEquals "$RESULT" ''
+        # Assert set:
+        assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NAME"
+
+    # =====================================================================
+    - name: '[act] query multiple missing properties as action outputs of given name'
+      id: output-named_multi_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: 'output-named:${{env.SELECTED_NAME}}'
+    - name: '[assert] query multiple missing properties as action outputs of given names'
+      env:
+        RESULT: ${{steps.output-named_multi_missing.outputs.nonExistingKey1}}
+        RESULT_JSON: ${{toJSON(steps.output-named_multi_missing.outputs)}}
+      run: |-
+        . "$SHELL_SETUP"
+        # Like this, the expected empty value is not distinguishable from unset:
+        assertEquals "$RESULT" ''
+        # Assert set:
+        assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NAME"
+
+  #########################################################################
+  test_json:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query all properties as JSON action output'
+      id: json_all
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: json
+    - name: '[assert] query all properties as JSON action output'
+      env:
+        RESULT_JSON: ${{steps.json_all.outputs.json}}
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: *validateAllImpl
+
+    # =====================================================================
+    - name: '[act] query multiple properties as JSON action output'
+      id: json_multi
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: json
+    - name: '[assert] query multiple properties as JSON action output'
+      env:
+        RESULT_JSON: ${{steps.json_multi.outputs.json}}
+        RESULT_GETTER: 'getJsonValue "$RESULT_JSON"'
+      run: *validateMultiImpl
+
+    # =====================================================================
+    - name: '[act] query multiple missing properties as JSON action output'
+      id: json_multi_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_KEYS}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: json
+    - name: '[assert] query multiple missing properties as JSON action output'
+      env:
+        RESULT_JSON: ${{steps.json_multi_missing.outputs.json}}
+      run: |-
+        . "$SHELL_SETUP"
+        resultGetter='getJsonValue "$RESULT_JSON"'
+        evalAndAssertEquals "$resultGetter" sourceJavaVersion  '21'
+        evalAndAssertEquals "$resultGetter" org.gradle.jvmargs '-ea -showversion'
+        evalAndAssertEquals "$resultGetter" colon:in:Key       'c'
+        evalAndAssertEquals "$resultGetter" unicode_escapes    'a«,»c'
+        evalAndAssertEquals "$resultGetter" "$SELECTED_NON_EX_KEY"  ''
+        evalAndAssertEquals "$resultGetter" "$SELECTED_NON_EX_KEY2" ''
+        assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NON_EX_KEY"
+        assertJsonContainsKey "$RESULT_JSON" "$SELECTED_NON_EX_KEY2"
+
+  #########################################################################
+  test_json-file:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[arrange] query multiple properties as JSON file (creating file)'
+      id: json-file_multi_create_arrange
+      run: |-
+        parentDir=$(mktemp --directory --dry-run --tmpdir=. test_json-file_multi_create_XXXXXX)
+        file=$parentDir/out/result.json
+        printf 'file=%s\n' "$file" | tee -- "$GITHUB_OUTPUT"
+        # ⇒ action must create at least two parent dirs
+    - name: '[act] query multiple properties as JSON file (creating file)'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'json-file:${{steps.json-file_multi_create_arrange.outputs.file}}'
+    - name: '[assert] query multiple properties as JSON file (creating file)'
+      env:
+        JSON_OUTPUT_FILE: ${{steps.json-file_multi_create_arrange.outputs.file}}
+        RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
+      run: *validateMultiImpl
+
+    # =====================================================================
+    - name: '[arrange] query multiple properties as JSON file (overwriting file)'
+      id: json-file_multi_overwrite_arrange
+      run: |-
+        file=$(mktemp --tmpdir=. test_json-file_multi_overwrite_XXXXXX.json)
+        # Write longer contents than the expected output. ⇒ If the action does not truncate, there will be
+        # non-parseable remains and parsing in function getFileJsonValue will fail.
+        for ((i=0; i<100; i++)); do printf 'This is ¬ JS}ON. '; done >"$file"
+        ls -lAF -- "$file"
+        printf 'file=%s\n' "$file" | tee -- "$GITHUB_OUTPUT"
+    - name: '[act] query multiple properties as JSON file (overwriting file)'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'json-file:${{steps.json-file_multi_overwrite_arrange.outputs.file}}'
+    - name: '[assert] query multiple properties as JSON file (overwriting file)'
+      env:
+        JSON_OUTPUT_FILE: ${{steps.json-file_multi_overwrite_arrange.outputs.file}}
+        RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
+      run: *validateMultiImpl
+
+    # =====================================================================
+    - name: '[arrange] query all properties as JSON file'
+      id: json-file_all_arrange
+      # Distinction between creating and overwriting need not be tested again.
+      # This test just uses an existing empty file.
+      run: &createEmptyJsonFile |-
+        # Remove leading "./" ⇒ Also test the case where given file has "no parent" (i.e. Java method
+        # java.nio.file.Path.getParent() returns null).
+        file=$(mktemp --tmpdir=. test_json-file_all_XXXXXX.json | sed 's=^\./==')
+        printf 'file=%s\n' "$file" | tee -- "$GITHUB_OUTPUT"
+    - name: '[act] query all properties as JSON file'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: 'json-file:${{steps.json-file_all_arrange.outputs.file}}'
+    - name: '[assert] query all properties as JSON file'
+      env:
+        JSON_OUTPUT_FILE: ${{steps.json-file_all_arrange.outputs.file}}
+        RESULT_GETTER: 'getJsonValue "$(<"$JSON_OUTPUT_FILE")"'
+      run: *validateAllImpl
+
+    # =====================================================================
+    - name: '[arrange] query multiple missing properties as JSON file'
+      id: json-file_multi_missing_arrange
+      run: *createEmptyJsonFile
+    - name: '[act] query multiple missing properties as JSON file'
+      id: json-file_multi_missing
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_KEYS}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: 'json-file:${{steps.json-file_multi_missing_arrange.outputs.file}}'
+    - name: '[assert] query multiple missing properties as JSON file'
+      env:
+        JSON_OUTPUT_FILE: ${{steps.json-file_multi_missing_arrange.outputs.file}}
+      run: |-
+        . "$SHELL_SETUP"
+        resultJson=$(<"$JSON_OUTPUT_FILE")
+        resultGetter='getJsonValue "$resultJson"'
+        evalAndAssertEquals "$resultGetter" sourceJavaVersion  '21'
+        evalAndAssertEquals "$resultGetter" org.gradle.jvmargs '-ea -showversion'
+        evalAndAssertEquals "$resultGetter" colon:in:Key       'c'
+        evalAndAssertEquals "$resultGetter" unicode_escapes    'a«,»c'
+        evalAndAssertEquals "$resultGetter" "$SELECTED_NON_EX_KEY"  ''
+        evalAndAssertEquals "$resultGetter" "$SELECTED_NON_EX_KEY2" ''
+        assertJsonContainsKey "$resultJson" "$SELECTED_NON_EX_KEY"
+        assertJsonContainsKey "$resultJson" "$SELECTED_NON_EX_KEY2"
+
+  # Each test which sets environment variables is a separate job to be independant of other tests.
+  #########################################################################
+  test_env_all:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query all properties as environment variables'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: env
+    - name: '[assert] query all properties as environment variables'
+      env:
+        RESULT_GETTER: getEnv
+      run: *validateAllImpl
+
+  #########################################################################
+  test_env_multi:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple properties as environment variables'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: env
+    - name: '[assert] query multiple properties as environment variables'
+      env:
+        RESULT_GETTER: getEnv
+      run: *validateMultiImpl
+
+  #########################################################################
+  test_env_multi_missing:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple missing properties as environment variables'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_KEY}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: env
+    - name: '[assert] query multiple missing properties as environment variables'
+      run: |-
+        . "$SHELL_SETUP"
+        assertVariableUnset "$SELECTED_NON_EX_KEY"
+        assertVariableUnset "$SELECTED_NON_EX_KEY2"
+        assertEquals "${!SELECTED_KEY}" '21'
+
+  #########################################################################
+  test_env_single:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query single property as environment variable'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEY}}'
+        resultType: env
+    - name: '[assert] query single property as environment variable'
+      env:
+        RESULT_GETTER: getEnv
+      run: *validateSingleImpl
+
+  #########################################################################
+  test_env-with-prefix_all:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query all properties as environment variables with prefix'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        resultType: 'env:ALL_PROPS__'
+    - name: '[assert] query all properties as environment variables'
+      env:
+        RESULT_GETTER: 'getEnvWithPrefix ALL_PROPS__'
+      run: *validateAllImpl
+
+  #########################################################################
+  test_env-with-prefix_multi:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple properties as environment variables with prefix'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'env:MULTI_PROPS__'
+    - name: '[assert] query multiple properties as environment variables with prefix'
+      env:
+        RESULT_GETTER: 'getEnvWithPrefix MULTI_PROPS__'
+      run: *validateMultiImpl
+
+  #########################################################################
+  test_env-with-prefix_single:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query single property as environment variable with prefix'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEY}}'
+        resultType: 'env:PROP__'
+    - name: '[assert] query single property as environment variable with prefix'
+      env:
+        RESULT_GETTER: 'getEnvWithPrefix PROP__'
+      run: *validateSingleImpl
+
+  #########################################################################
+  test_env-named_multi:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple properties as environment variables of given names'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'env-named:${{env.SELECTED_NAMES}}'
+    - name: '[assert] query multiple properties as environment variables of given names'
+      env:
+        RESULT_GETTER: getEnv
+      run: *validateMultiNamedImpl
+
+  #########################################################################
+  test_env-named_multi_missing:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple missing properties as environment variables'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_NON_EX_KEY}} ${{env.SELECTED_KEY}} ${{env.SELECTED_NON_EX_KEY2}}'
+        resultType: 'env-named:NE1 E1 NE2'
+    - name: '[assert] query multiple missing properties as environment variables'
+      run: |-
+        . "$SHELL_SETUP"
+        assertVariableUnset NE1
+        assertVariableUnset NE2
+        assertEquals "$E1" '21'
+
+  #########################################################################
+  test_env-named_multi-to-single:
+    runs-on: ubuntu-latest
+    steps:
+    - *checkoutStep
+    # =====================================================================
+    - name: '[act] query multiple properties as environment variables of given names'
+      uses: ./
+      with:
+        file: test/resources/test.properties
+        keys: '${{env.SELECTED_KEYS}}'
+        resultType: 'env-named:${{env.SELECTED_NAME}}'
+    - name: '[assert] query multiple properties as environment variables of given names'
+      env:
+        RESULT_GETTER: getEnv
+      run: *validateMultiNamed1Impl
