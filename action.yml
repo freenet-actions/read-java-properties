@@ -35,7 +35,7 @@ inputs:
   resultType:
     description: |-
       The result format and target. One of:
-      - "output": For each¹ property key <k>, set an output named "_<k>", but with special characters encoded. (The leading underscore serves to avoid conflicts with future output names used by this action.)
+      - "output": For each¹ property key <k>, set an output named _<k>, but with special characters encoded. (The leading underscore serves to avoid conflicts with future output names used by this action.)
       Encoding replaces all punctuation or whitespace characters except the underscore ("_") with "-" followed by four hex digits
       of its unicode code point. For example, for a property key "a.b-c_d", resultType "output" sets an output with name
       "_a-002Eb-002Dc_d".  
